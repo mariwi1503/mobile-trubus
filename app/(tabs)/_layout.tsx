@@ -4,10 +4,10 @@ import { View, Text, StyleSheet } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 
-function TabBarIcon({ name, color, badge }: { name: any; color: string; badge?: number }) {
+function TabBarIcon({ name, color, badge, size = 28 }: { name: any; color: string; badge?: number; size?: number }) {
   return (
     <View style={{ position: 'relative' }}>
-      <Ionicons name={name} size={24} color={color} />
+      <Ionicons name={name} size={size} color={color} />
       {badge !== undefined && badge > 0 && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
@@ -31,12 +31,12 @@ export default function TabLayout() {
           backgroundColor: COLORS.white,
           borderTopColor: COLORS.divider,
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 4,
+          height: 90,
+          paddingBottom: 30,
+          paddingTop: 10,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 13,
           fontWeight: '600',
         },
       }}
@@ -49,17 +49,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="experts"
-        options={{
-          title: 'Konsultasi',
-          tabBarIcon: ({ color }) => <TabBarIcon name="chatbubbles" color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="catalog"
         options={{
           title: 'Katalog',
           tabBarIcon: ({ color }) => <TabBarIcon name="grid" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="experts"
+        options={{
+          title: 'Konsultasi',
+          tabBarIcon: ({ color }) => <TabBarIcon name="chatbubbles" color={color} />,
         }}
       />
       <Tabs.Screen

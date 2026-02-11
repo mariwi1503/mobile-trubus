@@ -1,9 +1,19 @@
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as NavigationBar from 'expo-navigation-bar';
 import { AppProvider } from '../context/AppContext';
 import { COLORS } from '../constants/theme';
 
 export default function RootLayout() {
+  useEffect(() => {
+    async function configureNavigationBar() {
+      await NavigationBar.setVisibilityAsync('hidden');
+      await NavigationBar.setBehaviorAsync('overlay-swipe');
+    }
+    configureNavigationBar();
+  }, []);
+
   return (
     <AppProvider>
       <StatusBar style="dark" />

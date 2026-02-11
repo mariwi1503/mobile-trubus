@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.white, borderRadius: RADIUS.md,
     ...SHADOWS.small, padding: SPACING.md,
-    alignItems: 'center', width: 120, marginRight: SPACING.md,
+    alignItems: 'center', width: 120, marginRight: SPACING.md, marginBottom: SPACING.md,
   },
   imageContainer: { position: 'relative', marginBottom: 8 },
   image: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#f0f0f0' },

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList, TextInput, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { EXPERTS } from '../../data/experts';
@@ -11,27 +13,154 @@ import ProductCard from '../../components/ProductCard';
 import ExpertCard from '../../components/ExpertCard';
 import ArticleCard from '../../components/ArticleCard';
 
+const { width } = Dimensions.get('window');
+
 const BANNERS = [
-  { id: '1', title: 'Konsultasi Gratis!', subtitle: 'Konsultasi pertama dengan ahli pertanian', color: '#4CAF50', icon: 'chatbubbles' },
-  { id: '2', title: 'Diskon 30%', subtitle: 'Untuk semua pupuk organik', color: '#FF9800', icon: 'pricetag' },
-  { id: '3', title: 'Flash Sale', subtitle: 'Bibit tanaman premium mulai 15rb', color: '#E91E63', icon: 'flash' },
+  {
+    id: '1',
+    type: 'featured',
+    title: 'Solusi Tani\nLebih Presisi',
+    subtitle: 'Konsultasi langsung di lahan Anda melalui bantuan ahli.',
+    tag: 'Smart Farming',
+    image: 'https://images.unsplash.com/photo-1707944745899-104a4b12d945?q=80&w=1047&auto=format&fit=crop',
+    detailImage: 'https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?w=200',
+    color: ['#022c22', '#064e3b', 'transparent'], // emerald-950 to emerald-900/80 to transparent
+    btnText: 'Konsultasi Sekarang',
+    route: '/(tabs)/experts'
+  },
+  {
+    id: '2',
+    type: 'promo',
+    title: 'Diskon 30%',
+    subtitle: 'Untuk semua pupuk organik',
+    image: 'https://media.istockphoto.com/id/532270528/id/foto/hasil-bumi-yang-ditanam-secara-organik-tanpa-pestisida.jpg?s=612x612&w=0&k=20&c=uWpS-8IzhGscFHpnDFlLIFDH8QCVQXnSKPRvPRaQguM=',
+    color: ['#F57C00', 'rgba(245, 124, 0, 0.8)', 'transparent'],
+    icon: 'pricetag',
+    route: '/(tabs)/catalog'
+  },
+  {
+    id: '3',
+    type: 'promo',
+    title: 'Flash Sale',
+    subtitle: 'Bibit tanaman premium mulai 15rb',
+    image: 'https://media.istockphoto.com/id/1398965606/id/foto/ayah-dan-anak-perempuan-berbelanja-di-toko-kelontong.jpg?s=612x612&w=0&k=20&c=cIP-RCCA0BHjmhYZ6aolm_T7ygXeFr2tb7QNrjBl7sA=',
+    color: ['#C2185B', 'rgba(194, 24, 91, 0.8)', 'transparent'],
+    icon: 'flash',
+    route: '/(tabs)/catalog'
+  },
 ];
 
+const BannerCard = ({ banner, onPress }: { banner: any, onPress: () => void }) => {
+  if (banner.type === 'featured') {
+    return (
+      <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={styles.featuredBannerContainer}>
+        <View style={styles.featuredBanner}>
+          <Image
+            source={{ uri: banner.image }}
+            style={styles.featuredBannerBg}
+          />
+          <LinearGradient
+            colors={['#022c22', 'rgba(6, 78, 59, 0.8)', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={StyleSheet.absoluteFill}
+          />
+
+          {/* Decoration */}
+          <View style={styles.decorationCircle} />
+
+          <View style={styles.featuredBannerContent}>
+            <View style={{ flex: 1, paddingVertical: 4 }}>
+              <View style={styles.tagContainer}>
+                <BlurView intensity={20} style={styles.tagBlur}>
+                  <Ionicons name="leaf" size={10} color="#86efac" style={{ marginRight: 6 }} />
+                  <Text style={styles.tagText}>{banner.tag}</Text>
+                </BlurView>
+              </View>
+
+              <Text style={styles.featuredTitle}>{banner.title}</Text>
+              <Text style={styles.featuredSubtitle}>{banner.subtitle}</Text>
+
+              <View style={styles.featuredBtn}>
+                <Text style={styles.featuredBtnText}>{banner.btnText}</Text>
+                <Ionicons name="arrow-forward" size={12} color={COLORS.white} />
+              </View>
+            </View>
+
+            {/* Visual Detail Circle */}
+            <View style={styles.detailImageContainer}>
+              <View style={styles.detailImageWrap}>
+                <Image source={{ uri: banner.detailImage }} style={styles.detailImage} />
+              </View>
+              <View style={styles.detailIconBadge}>
+                <Ionicons name="leaf" size={14} color="#16a34a" />
+              </View>
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={styles.promoBannerContainer}>
+      <View style={styles.featuredBanner}>
+        {banner.image && (
+          <Image
+            source={{ uri: banner.image }}
+            style={StyleSheet.absoluteFill}
+          />
+        )}
+        {/* Gradient only at the bottom for text readability */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.9)']}
+          style={[StyleSheet.absoluteFill, { top: '50%' }]}
+        />
+
+        {/* Gradient only at the bottom for text readability */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.9)']}
+          style={[StyleSheet.absoluteFill, { top: '50%' }]}
+        />
+
+        <View style={styles.promoContent}>
+          <Text style={styles.promoTitle}>{banner.title}</Text>
+          <Text style={styles.promoSubtitle}>{banner.subtitle}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
 const QUICK_MENU = [
-  { id: '1', name: 'Konsultasi', icon: 'chatbubbles', color: '#4CAF50', route: '/(tabs)/experts' },
-  { id: '2', name: 'Bibit', icon: 'leaf', color: '#8BC34A', route: '/(tabs)/catalog' },
-  { id: '3', name: 'Pupuk', icon: 'flask', color: '#FF9800', route: '/(tabs)/catalog' },
-  { id: '4', name: 'Pestisida', icon: 'shield-checkmark', color: '#F44336', route: '/(tabs)/catalog' },
-  { id: '5', name: 'Alat Tani', icon: 'construct', color: '#9C27B0', route: '/(tabs)/catalog' },
-  { id: '6', name: 'Artikel', icon: 'newspaper', color: '#2196F3', route: '/(tabs)/articles' },
-  { id: '7', name: 'Pesanan', icon: 'receipt', color: '#607D8B', route: '/orders' },
-  { id: '8', name: 'Promo', icon: 'pricetags', color: '#E91E63', route: '/(tabs)/catalog' },
+  { id: '1', name: 'Bibit', icon: 'leaf', color: '#4CAF50', route: '/(tabs)/catalog' },
+  { id: '2', name: 'Pupuk', icon: 'flask', color: '#8BC34A', route: '/(tabs)/catalog' },
+  { id: '3', name: 'Pestisida', icon: 'shield-checkmark', color: '#FF9800', route: '/(tabs)/catalog' },
+  { id: '4', name: 'Alat Tani', icon: 'construct', color: '#F44336', route: '/(tabs)/catalog' },
 ];
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user, getCartCount, getUnreadCount } = useApp();
-  const [searchText, setSearchText] = useState('');
+  const [activeBanner, setActiveBanner] = useState(0);
+  const bannerRef = React.useRef<ScrollView>(null);
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      const nextIndex = (activeBanner + 1) % BANNERS.length;
+      setActiveBanner(nextIndex);
+      bannerRef.current?.scrollTo({ x: nextIndex * (width - 48 + SPACING.md), animated: true });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [activeBanner]);
+
+  const onScroll = (event: any) => {
+    const slide = Math.ceil(event.nativeEvent.contentOffset.x / (width - 48 + SPACING.md));
+    if (slide !== activeBanner && slide >= 0 && slide < BANNERS.length) {
+      setActiveBanner(slide);
+    }
+  };
 
   const onlineExperts = EXPERTS.filter(e => e.isOnline).slice(0, 6);
   const promoProducts = PRODUCTS.filter(p => p.originalPrice).slice(0, 6);
@@ -74,28 +203,34 @@ export default function HomeScreen() {
           </View>
         </View>
         {/* Search */}
-        <TouchableOpacity style={styles.searchBar} onPress={() => router.push('/(tabs)/catalog')}>
+        {/* <TouchableOpacity style={styles.searchBar} onPress={() => router.push('/(tabs)/catalog')}>
           <Ionicons name="search-outline" size={18} color={COLORS.textLight} />
           <Text style={styles.searchPlaceholder}>Cari bibit, pupuk, ahli pertanian...</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
         {/* Banner Carousel */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bannerScroll} contentContainerStyle={{ paddingHorizontal: SPACING.lg }}>
+        <ScrollView
+          ref={bannerRef}
+          horizontal
+          pagingEnabled={false} // Custom paging via snapToInterval might be better, or just disable if auto. 
+          // Actually width is mostly screen width, but we have gaps. 
+          // Let's use snapToInterval
+          snapToInterval={width - 48 + SPACING.md}
+          decelerationRate="fast"
+          showsHorizontalScrollIndicator={false}
+          style={styles.bannerScroll}
+          contentContainerStyle={{ paddingHorizontal: SPACING.lg, gap: SPACING.md }}
+          onMomentumScrollEnd={onScroll}
+          scrollEventThrottle={16}
+        >
           {BANNERS.map((banner) => (
-            <TouchableOpacity key={banner.id} style={[styles.banner, { backgroundColor: banner.color }]} activeOpacity={0.8}>
-              <View style={styles.bannerContent}>
-                <Text style={styles.bannerTitle}>{banner.title}</Text>
-                <Text style={styles.bannerSubtitle}>{banner.subtitle}</Text>
-                <View style={styles.bannerBtn}>
-                  <Text style={styles.bannerBtnText}>Lihat</Text>
-                </View>
-              </View>
-              <View style={styles.bannerIconWrap}>
-                <Ionicons name={banner.icon as any} size={50} color="rgba(255,255,255,0.3)" />
-              </View>
-            </TouchableOpacity>
+            <BannerCard
+              key={banner.id}
+              banner={banner}
+              onPress={() => router.push(banner.route as any)}
+            />
           ))}
         </ScrollView>
 
@@ -105,7 +240,7 @@ export default function HomeScreen() {
             {QUICK_MENU.map((item) => (
               <TouchableOpacity key={item.id} style={styles.quickMenuItem} onPress={() => router.push(item.route as any)}>
                 <View style={[styles.quickMenuIcon, { backgroundColor: item.color + '15' }]}>
-                  <Ionicons name={item.icon as any} size={22} color={item.color} />
+                  <Ionicons name={item.icon as any} size={32} color={item.color} />
                 </View>
                 <Text style={styles.quickMenuText}>{item.name}</Text>
               </TouchableOpacity>
@@ -114,7 +249,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Trubus Coins */}
-        <View style={styles.sectionPadded}>
+        {/* <View style={styles.sectionPadded}>
           <TouchableOpacity style={styles.coinCard} onPress={() => router.push('/(tabs)/profile')}>
             <View style={styles.coinLeft}>
               <View style={styles.coinIconWrap}>
@@ -130,7 +265,7 @@ export default function HomeScreen() {
               <Text style={styles.topUpText}>Top Up</Text>
             </TouchableOpacity>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         {/* Online Experts */}
         <View style={styles.section}>
@@ -148,7 +283,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Promo Products */}
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="flash" size={18} color={COLORS.accent} />
@@ -163,7 +298,7 @@ export default function HomeScreen() {
               <ProductCard key={product.id} product={product} />
             ))}
           </ScrollView>
-        </View>
+        </View> */}
 
         {/* Popular Products */}
         <View style={styles.section}>
@@ -205,14 +340,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     backgroundColor: COLORS.white, paddingTop: 48, paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.md, borderBottomLeftRadius: RADIUS.xl, borderBottomRightRadius: RADIUS.xl,
-    ...SHADOWS.small,
+    paddingBottom: SPACING.xs, ...SHADOWS.small,
   },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },
   headerLogo: { width: 40, height: 40, marginRight: SPACING.sm },
   greeting: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  subGreeting: { fontSize: 12, color: COLORS.textSecondary },
+  subGreeting: { fontSize: 14, color: COLORS.textSecondary },
   headerRight: { flexDirection: 'row', gap: 8 },
   iconBtn: { position: 'relative', padding: 6 },
   notifBadge: {
@@ -230,19 +364,73 @@ const styles = StyleSheet.create({
   searchPlaceholder: { fontSize: 13, color: COLORS.textLight, marginLeft: 8 },
   scrollView: { flex: 1 },
   bannerScroll: { marginTop: SPACING.lg },
-  banner: {
-    width: 280, borderRadius: RADIUS.lg, padding: SPACING.lg,
-    marginRight: SPACING.md, flexDirection: 'row', overflow: 'hidden', height: 120,
+
+  featuredBannerContainer: {
+    width: width - 48,
+    height: 220,
+    borderRadius: 30, // rounded-[2.5rem] approx
+    overflow: 'hidden',
+    backgroundColor: '#022c22', // fallback
+    ...SHADOWS.medium,
+    shadowColor: '#14532d', // shadow-green-900/10
   },
-  bannerContent: { flex: 1 },
-  bannerTitle: { fontSize: 18, fontWeight: '700', color: COLORS.white },
-  bannerSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 4 },
-  bannerBtn: {
-    backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: RADIUS.sm,
-    paddingHorizontal: 12, paddingVertical: 4, alignSelf: 'flex-start', marginTop: 10,
+  featuredBanner: { flex: 1, position: 'relative' },
+  featuredBannerBg: { ...StyleSheet.absoluteFillObject, opacity: 0.5 },
+  decorationCircle: {
+    position: 'absolute', top: -40, right: -40, width: 128, height: 128,
+    borderRadius: 64, backgroundColor: 'rgba(74, 222, 128, 0.1)', // green-400/10
   },
-  bannerBtnText: { color: COLORS.white, fontSize: 12, fontWeight: '600' },
-  bannerIconWrap: { position: 'absolute', right: 10, bottom: 10, opacity: 0.5 },
+  featuredBannerContent: { flex: 1, padding: 24, paddingLeft: 32, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  tagContainer: { flexDirection: 'row', marginBottom: 12 },
+  tagBlur: {
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 4,
+    borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.1)', overflow: 'hidden',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  tagText: { fontSize: 9, fontWeight: '800', color: COLORS.white, textTransform: 'uppercase', letterSpacing: 1.5 },
+  featuredTitle: { fontSize: 24, fontWeight: '900', color: COLORS.white, marginBottom: 8, lineHeight: 28 },
+  featuredSubtitle: { fontSize: 11, fontWeight: '700', color: 'rgba(240, 253, 244, 0.7)', marginBottom: 20, maxWidth: 180, lineHeight: 16 },
+  featuredBtn: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#22c55e', // green-500
+    paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, alignSelf: 'flex-start',
+    shadowColor: '#14532d', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4,
+  },
+  featuredBtnText: { color: COLORS.white, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.2, marginRight: 8 },
+  detailImageContainer: { position: 'relative', display: 'flex' }, // Hidden on small screens? we'll keep it
+  detailImageWrap: {
+    width: 96, height: 96, borderRadius: 48, borderWidth: 4, borderColor: 'rgba(255,255,255,0.2)',
+    padding: 4, overflow: 'hidden',
+  },
+  detailImage: { width: '100%', height: '100%', borderRadius: 999 },
+  detailIconBadge: {
+    position: 'absolute', bottom: -4, right: -4, width: 32, height: 32, borderRadius: 16,
+    backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center', ...SHADOWS.medium,
+  },
+
+  // Promo Banners
+  promoBannerContainer: {
+    width: width - 80, // Slightly smaller than featured? Or maybe same? User asked "jadikan semua banner memiliki tinggi seperti itu" -> same height.
+    flex: 1,
+    height: 220,
+    borderRadius: 30,
+    overflow: 'hidden',
+    ...SHADOWS.medium,
+  },
+  promoBanner: { flex: 1, padding: 24, flexDirection: 'row', alignItems: 'center' },
+  promoContent: { flex: 1, zIndex: 1, justifyContent: 'flex-end', padding: 24, paddingBottom: 32 },
+  promoTitle: {
+    fontSize: 28, fontWeight: '800', color: COLORS.white, marginBottom: 4,
+  },
+  promoSubtitle: {
+    fontSize: 14, color: 'rgba(255,255,255,0.9)', maxWidth: 240, fontWeight: '600'
+  },
+  promoBtn: {
+    // Removed
+  },
+  promoBtnText: {
+    // Removed
+  },
+  promoIconWrap: { position: 'absolute', right: -20, bottom: -20, transform: [{ rotate: '-15deg' }] },
   section: { marginTop: SPACING.xl },
   sectionPadded: { marginTop: SPACING.lg, paddingHorizontal: SPACING.lg },
   sectionHeader: {
@@ -256,12 +444,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row', flexWrap: 'wrap',
     paddingHorizontal: SPACING.lg, justifyContent: 'space-between',
   },
-  quickMenuItem: { width: '25%', alignItems: 'center', marginBottom: SPACING.lg },
+  quickMenuItem: { width: '25%', alignItems: 'center', marginBottom: SPACING.md },
   quickMenuIcon: {
-    width: 48, height: 48, borderRadius: RADIUS.md,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
+    width: 64, height: 64, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 8,
   },
-  quickMenuText: { fontSize: 11, color: COLORS.text, fontWeight: '500' },
+  quickMenuText: { fontSize: 14, color: COLORS.text, fontWeight: '600' },
   coinCard: {
     backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
     padding: SPACING.lg, flexDirection: 'row', alignItems: 'center',
