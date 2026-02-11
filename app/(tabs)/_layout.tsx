@@ -1,0 +1,101 @@
+import { Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet } from 'react-native';
+import { COLORS } from '../../constants/theme';
+import { useApp } from '../../context/AppContext';
+
+function TabBarIcon({ name, color, badge }: { name: any; color: string; badge?: number }) {
+  return (
+    <View style={{ position: 'relative' }}>
+      <Ionicons name={name} size={24} color={color} />
+      {badge !== undefined && badge > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+export default function TabLayout() {
+  const { getCartCount } = useApp();
+  const cartCount = getCartCount();
+
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.textLight,
+        tabBarStyle: {
+          backgroundColor: COLORS.white,
+          borderTopColor: COLORS.divider,
+          borderTopWidth: 1,
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 4,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+        },
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Beranda',
+          tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="experts"
+        options={{
+          title: 'Konsultasi',
+          tabBarIcon: ({ color }) => <TabBarIcon name="chatbubbles" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="catalog"
+        options={{
+          title: 'Katalog',
+          tabBarIcon: ({ color }) => <TabBarIcon name="grid" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="articles"
+        options={{
+          title: 'Artikel',
+          tabBarIcon: ({ color }) => <TabBarIcon name="newspaper" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profil',
+          tabBarIcon: ({ color }) => <TabBarIcon name="person" color={color} />,
+        }}
+      />
+    </Tabs>
+  );
+}
+
+const styles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    backgroundColor: COLORS.accent,
+    borderRadius: 10,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: COLORS.white,
+    fontSize: 9,
+    fontWeight: '700',
+  },
+});
