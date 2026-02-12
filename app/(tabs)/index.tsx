@@ -143,20 +143,20 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user, getCartCount, getUnreadCount } = useApp();
   const [activeBanner, setActiveBanner] = useState(0);
-  const bannerRef = React.useRef<ScrollView>(null);
+  const flatListRef = React.useRef<FlatList>(null);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
       const nextIndex = (activeBanner + 1) % BANNERS.length;
       setActiveBanner(nextIndex);
-      bannerRef.current?.scrollTo({ x: nextIndex * (width - 48 + SPACING.md), animated: true });
+      flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
     }, 5000);
 
     return () => clearInterval(interval);
   }, [activeBanner]);
 
   const onScroll = (event: any) => {
-    const slide = Math.ceil(event.nativeEvent.contentOffset.x / (width - 48 + SPACING.md));
+    const slide = Math.ceil(event.nativeEvent.contentOffset.x / event.nativeEvent.layoutMeasurement.width);
     if (slide !== activeBanner && slide >= 0 && slide < BANNERS.length) {
       setActiveBanner(slide);
     }
@@ -211,28 +211,43 @@ export default function HomeScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
         {/* Banner Carousel */}
-        <ScrollView
-          ref={bannerRef}
-          horizontal
-          pagingEnabled={false} // Custom paging via snapToInterval might be better, or just disable if auto. 
-          // Actually width is mostly screen width, but we have gaps. 
-          // Let's use snapToInterval
-          snapToInterval={width - 48 + SPACING.md}
-          decelerationRate="fast"
-          showsHorizontalScrollIndicator={false}
-          style={styles.bannerScroll}
-          contentContainerStyle={{ paddingHorizontal: SPACING.lg, gap: SPACING.md }}
-          onMomentumScrollEnd={onScroll}
-          scrollEventThrottle={16}
-        >
-          {BANNERS.map((banner) => (
-            <BannerCard
-              key={banner.id}
-              banner={banner}
-              onPress={() => router.push(banner.route as any)}
-            />
-          ))}
-        </ScrollView>
+        {/* Banner Carousel */}
+        <View>
+          <FlatList
+            ref={flatListRef}
+            data={BANNERS}
+            keyExtractor={(item) => item.id}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 0 }} // Managed by item width
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            renderItem={({ item }) => (
+              <View style={{ width: width - SPACING.lg * 2, marginHorizontal: SPACING.lg }}>
+                <BannerCard
+                  banner={item}
+                  onPress={() => router.push(item.route as any)}
+                />
+              </View>
+            )}
+            snapToAlignment="center"
+            decelerationRate="fast"
+          />
+
+          {/* Pagination/Dots */}
+          <View style={styles.pagination}>
+            {BANNERS.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.dot,
+                  activeBanner === index ? styles.dotActive : styles.dotInactive,
+                ]}
+              />
+            ))}
+          </View>
+        </View>
 
         {/* Quick Menu */}
         <View style={styles.section}>
@@ -330,6 +345,45 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Consult Expert CTA */}
+        <View style={{ paddingHorizontal: SPACING.lg, marginTop: SPACING.xl, marginBottom: SPACING.lg }}>
+          <View style={styles.ctaContainer}>
+            <LinearGradient
+              colors={['#15803d', '#059669']} // green-700 to emerald-600
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+
+            <View style={styles.ctaContent}>
+              {/* Overlapping Avatars */}
+              <View style={styles.avatarRow}>
+                {onlineExperts.slice(0, 4).map((expert, i) => (
+                  <Image
+                    key={expert.id}
+                    source={{ uri: expert.image }}
+                    style={[
+                      styles.ctaAvatar,
+                      { zIndex: 4 - i, marginLeft: i === 0 ? 0 : -16 }
+                    ]}
+                  />
+                ))}
+              </View>
+
+              <Text style={styles.ctaTitle}>Butuh Solusi Cepat?</Text>
+              <Text style={styles.ctaSubtitle}>Tanya apa saja seputar pertanian kepada tim ahli kami.</Text>
+
+              <TouchableOpacity
+                style={styles.ctaButton}
+                onPress={() => router.push('/(tabs)/experts')}
+              >
+                <Ionicons name="chatbubble-ellipses" size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.ctaButtonText}>Hubungi Ahli</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
         <View style={{ height: 20 }} />
       </ScrollView>
     </View>
@@ -366,7 +420,7 @@ const styles = StyleSheet.create({
   bannerScroll: { marginTop: SPACING.lg },
 
   featuredBannerContainer: {
-    width: width - 48,
+    width: '100%',
     height: 220,
     borderRadius: 30, // rounded-[2.5rem] approx
     overflow: 'hidden',
@@ -409,7 +463,7 @@ const styles = StyleSheet.create({
 
   // Promo Banners
   promoBannerContainer: {
-    width: width - 80, // Slightly smaller than featured? Or maybe same? User asked "jadikan semua banner memiliki tinggi seperti itu" -> same height.
+    width: '100%',
     flex: 1,
     height: 220,
     borderRadius: 30,
@@ -430,6 +484,15 @@ const styles = StyleSheet.create({
   promoBtnText: {
     // Removed
   },
+
+  // Pagination
+  pagination: {
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    gap: 6, marginTop: SPACING.md,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  dotActive: { backgroundColor: COLORS.primary, width: 20 },
+  dotInactive: { backgroundColor: COLORS.textLight, opacity: 0.3 },
   promoIconWrap: { position: 'absolute', right: -20, bottom: -20, transform: [{ rotate: '-15deg' }] },
   section: { marginTop: SPACING.xl },
   sectionPadded: { marginTop: SPACING.lg, paddingHorizontal: SPACING.lg },
@@ -466,4 +529,48 @@ const styles = StyleSheet.create({
   coinAmount: { fontSize: 18, fontWeight: '700', color: COLORS.coinColor },
   topUpBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   topUpText: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
+
+  // CTA Component
+  ctaContainer: {
+    borderRadius: 48,
+    overflow: 'hidden',
+    backgroundColor: COLORS.primary,
+    ...SHADOWS.medium,
+  },
+  ctaContent: {
+    padding: 32,
+    alignItems: 'center',
+  },
+  avatarRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  ctaAvatar: {
+    width: 56, height: 56,
+    borderRadius: 16,
+    borderWidth: 4,
+    borderColor: '#16a34a', // green-600 matching gradient start roughly
+  },
+  ctaTitle: {
+    fontSize: 20, fontWeight: '900', color: COLORS.white,
+    marginBottom: 8, letterSpacing: 0.5,
+  },
+  ctaSubtitle: {
+    fontSize: 14, fontWeight: '500', color: 'rgba(236, 253, 245, 0.8)',
+    textAlign: 'center', marginBottom: 32, maxWidth: 240,
+  },
+  ctaButton: {
+    width: '100%',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.white,
+    paddingVertical: 20,
+    borderRadius: 28,
+    ...SHADOWS.medium,
+  },
+  ctaButtonText: {
+    fontSize: 12, fontWeight: '900', color: '#16a34a',
+    textTransform: 'uppercase', letterSpacing: 2.4,
+  },
 });
+// });

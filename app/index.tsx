@@ -33,7 +33,7 @@ export default function SplashScreen() {
       <View style={styles.bgCircle2} />
       <Animated.View style={[styles.logoContainer, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
         <Image
-          source={{ uri: 'https://d64gsuwffb70l.cloudfront.net/698c32f324d41fa898aee39d_1770799657846_84477df5.png' }}
+          source={require('../assets/images/splash-icon.png')}
           style={styles.logo}
           resizeMode="contain"
         />
@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(76, 175, 80, 0.08)',
   },
   logoContainer: { alignItems: 'center' },
-  logo: { width: 180, height: 180 },
+  logo: { width: 300, height: 300 },
   tagline: {
     fontSize: 16, color: COLORS.primaryDark,
     fontWeight: '500', marginTop: 8, letterSpacing: 1,

@@ -2,9 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
-import { useApp } from '../context/AppContext';
-import { EXPERTS } from '../data/experts';
+import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
+import { useApp } from '../../context/AppContext';
+import { EXPERTS } from '../../data/experts';
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
   pending_payment: { label: 'Menunggu Pembayaran', color: '#FF9800', bg: '#FFF3E0' },

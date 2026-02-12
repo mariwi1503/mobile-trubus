@@ -105,7 +105,15 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
             </View>
 
             {mode === 'login' && (
-              <Text style={styles.hintText}>Demo: budi@email.com / 123456 (Konsumen){'\n'}bambang@email.com / 123456 (Ahli)</Text>
+              <View style={styles.demoContainer}>
+                <Text style={styles.hintText}>Demo (Klik untuk isi):</Text>
+                <TouchableOpacity onPress={() => { setEmail('budi@email.com'); setPassword('123456'); }}>
+                  <Text style={styles.demoLink}>Konsumen: budi@email.com / 123456</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => { setEmail('bambang@email.com'); setPassword('123456'); }}>
+                  <Text style={styles.demoLink}>Ahli: bambang@email.com / 123456</Text>
+                </TouchableOpacity>
+              </View>
             )}
 
             <TouchableOpacity style={styles.submitBtn} onPress={mode === 'login' ? handleLogin : handleRegister}>
@@ -129,7 +137,7 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
 // ─── Expert Dashboard ─────────────────────────────────────────
 function ExpertDashboard() {
   const router = useRouter();
-  const { user, orders, logout } = useApp();
+  const { user, orders, logout, updateStatus } = useApp();
 
   const myConsultations = orders.filter(o => o.type === 'consultation');
   const pending = myConsultations.filter(o => o.status === 'pending_payment');
@@ -154,10 +162,41 @@ function ExpertDashboard() {
               <View style={styles.verifiedBadge}><Ionicons name="checkmark-circle" size={16} color="#FFD700" /></View>
             </View>
             <Text style={styles.expertSpec}>{user.specialization || 'Ahli Pertanian'}</Text>
-            <View style={styles.expertRoleBadge}>
-              <Ionicons name="school" size={10} color={COLORS.white} />
-              <Text style={styles.expertRoleText}>Ahli Pertanian</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 8 }}>
+              <View style={styles.expertRoleBadge}>
+                <Ionicons name="school" size={10} color={COLORS.white} />
+                <Text style={styles.expertRoleText}>Ahli Pertanian</Text>
+              </View>
+              <View style={[styles.expertRoleBadge, { backgroundColor: user.status === 'online' ? '#4CAF50' : user.status === 'busy' ? '#FF9800' : '#9E9E9E' }]}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: 'white', marginRight: 4 }} />
+                <Text style={styles.expertRoleText}>
+                  {user.status === 'online' ? 'Tersedia' : user.status === 'busy' ? 'Sibuk' : 'Offline'}
+                </Text>
+              </View>
             </View>
+          </View>
+        </View>
+
+        {/* Status Toggle */}
+        <View style={styles.statusToggleContainer}>
+          <Text style={styles.statusToggleLabel}>Set Status:</Text>
+          <View style={styles.statusButtons}>
+            {[
+              { id: 'online', label: 'Tersedia', color: '#4CAF50' },
+              { id: 'busy', label: 'Sibuk', color: '#FF9800' },
+              { id: 'offline', label: 'Offline', color: '#9E9E9E' }
+            ].map((s) => (
+              <TouchableOpacity
+                key={s.id}
+                style={[
+                  styles.statusBtn,
+                  user.status === s.id && { backgroundColor: s.color, borderColor: s.color }
+                ]}
+                onPress={() => updateStatus(s.id as any)}
+              >
+                <Text style={[styles.statusBtnText, user.status === s.id && { color: 'white' }]}>{s.label}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
       </View>
@@ -305,21 +344,27 @@ function ConsumerProfile() {
   const shippedOrders = orders.filter(o => o.type === 'product' && o.status === 'shipped').length;
 
   const MENU_ITEMS = [
-    { section: 'Pesanan & Konsultasi', items: [
-      { id: 'orders', icon: 'receipt-outline', label: 'Pesanan Saya', route: '/orders', color: COLORS.primary },
-      { id: 'consultations', icon: 'chatbubbles-outline', label: 'Riwayat Konsultasi', route: '/consultations', color: '#2196F3' },
-      { id: 'wishlist', icon: 'heart-outline', label: 'Wishlist', route: '/(tabs)/catalog', color: '#E91E63' },
-    ]},
-    { section: 'Akun', items: [
-      { id: 'addresses', icon: 'location-outline', label: 'Alamat Pengiriman', route: '/addresses', color: '#FF9800' },
-      { id: 'notifications', icon: 'notifications-outline', label: 'Notifikasi', route: '/notifications', color: '#9C27B0' },
-      { id: 'settings', icon: 'settings-outline', label: 'Pengaturan', route: '', color: '#607D8B' },
-    ]},
-    { section: 'Lainnya', items: [
-      { id: 'help', icon: 'help-circle-outline', label: 'Pusat Bantuan', route: '', color: '#00BCD4' },
-      { id: 'about', icon: 'information-circle-outline', label: 'Tentang Aplikasi', route: '', color: '#4CAF50' },
-      { id: 'rate', icon: 'star-outline', label: 'Beri Rating', route: '', color: '#FFC107' },
-    ]},
+    {
+      section: 'Pesanan & Konsultasi', items: [
+        { id: 'orders', icon: 'receipt-outline', label: 'Pesanan Saya', route: '/orders', color: COLORS.primary },
+        { id: 'consultations', icon: 'chatbubbles-outline', label: 'Riwayat Konsultasi', route: '/consultations', color: '#2196F3' },
+        { id: 'wishlist', icon: 'heart-outline', label: 'Wishlist', route: '/(tabs)/catalog', color: '#E91E63' },
+      ]
+    },
+    {
+      section: 'Akun', items: [
+        { id: 'addresses', icon: 'location-outline', label: 'Alamat Pengiriman', route: '/addresses', color: '#FF9800' },
+        { id: 'notifications', icon: 'notifications-outline', label: 'Notifikasi', route: '/notifications', color: '#9C27B0' },
+        { id: 'settings', icon: 'settings-outline', label: 'Pengaturan', route: '', color: '#607D8B' },
+      ]
+    },
+    {
+      section: 'Lainnya', items: [
+        { id: 'help', icon: 'help-circle-outline', label: 'Pusat Bantuan', route: '', color: '#00BCD4' },
+        { id: 'about', icon: 'information-circle-outline', label: 'Tentang Aplikasi', route: '', color: '#4CAF50' },
+        { id: 'rate', icon: 'star-outline', label: 'Beri Rating', route: '', color: '#FFC107' },
+      ]
+    },
   ];
 
   return (
@@ -346,8 +391,8 @@ function ConsumerProfile() {
         </View>
         <View style={styles.coinActions}>
           {[{ icon: 'add-circle', label: 'Top Up', bg: '#E8F5E9', color: COLORS.primary },
-            { icon: 'swap-horizontal', label: 'Transfer', bg: '#FFF3E0', color: COLORS.accentOrange },
-            { icon: 'time', label: 'Riwayat', bg: '#E3F2FD', color: COLORS.info }].map((a, i) => (
+          { icon: 'swap-horizontal', label: 'Transfer', bg: '#FFF3E0', color: COLORS.accentOrange },
+          { icon: 'time', label: 'Riwayat', bg: '#E3F2FD', color: COLORS.info }].map((a, i) => (
             <TouchableOpacity key={i} style={styles.coinAction}>
               <View style={[styles.coinActionIcon, { backgroundColor: a.bg }]}><Ionicons name={a.icon as any} size={20} color={a.color} /></View>
               <Text style={styles.coinActionText}>{a.label}</Text>
@@ -361,9 +406,9 @@ function ConsumerProfile() {
         <Text style={styles.orderStatusTitle}>Status Pesanan</Text>
         <View style={styles.orderStatusRow}>
           {[{ icon: 'hourglass', label: 'Belum Bayar', count: pendingOrders, bg: '#FFF3E0', color: '#FF9800' },
-            { icon: 'cube', label: 'Diproses', count: paidOrders, bg: '#E3F2FD', color: '#2196F3' },
-            { icon: 'car', label: 'Dikirim', count: shippedOrders, bg: '#E8F5E9', color: '#4CAF50' },
-            { icon: 'star', label: 'Beri Nilai', count: 0, bg: '#FCE4EC', color: '#E91E63' }].map((s, i) => (
+          { icon: 'cube', label: 'Diproses', count: paidOrders, bg: '#E3F2FD', color: '#2196F3' },
+          { icon: 'car', label: 'Dikirim', count: shippedOrders, bg: '#E8F5E9', color: '#4CAF50' },
+          { icon: 'star', label: 'Beri Nilai', count: 0, bg: '#FCE4EC', color: '#E91E63' }].map((s, i) => (
             <TouchableOpacity key={i} style={styles.orderStatusItem} onPress={() => router.push('/orders')}>
               <View style={[styles.orderStatusIcon, { backgroundColor: s.bg }]}>
                 <Ionicons name={s.icon as any} size={20} color={s.color} />
@@ -486,7 +531,9 @@ const styles = StyleSheet.create({
   roleBtnActive: { backgroundColor: COLORS.primary },
   roleBtnText: { fontSize: 13, fontWeight: '600', color: COLORS.primary },
   roleBtnTextActive: { color: COLORS.white },
-  hintText: { fontSize: 11, color: COLORS.textLight, marginTop: 8, lineHeight: 16, textAlign: 'center' },
+  hintText: { fontSize: 11, color: COLORS.textLight, marginTop: 8, textAlign: 'center' },
+  demoContainer: { marginTop: 12, alignItems: 'center', backgroundColor: '#F5F5F5', padding: 8, borderRadius: 8 },
+  demoLink: { fontSize: 11, color: COLORS.primary, fontWeight: '600', marginTop: 4 },
   submitBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.lg, paddingVertical: 16, alignItems: 'center', marginTop: 20 },
   submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
   switchMode: { alignItems: 'center', marginTop: 16 },
@@ -555,6 +602,11 @@ const styles = StyleSheet.create({
   expertSpec: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   expertRoleBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start', marginTop: 4, gap: 3 },
   expertRoleText: { fontSize: 10, color: COLORS.white, fontWeight: '600' },
+  statusToggleContainer: { marginTop: 16, backgroundColor: 'rgba(255,255,255,0.1)', padding: 12, borderRadius: 12 },
+  statusToggleLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 11, marginBottom: 8, fontWeight: '600' },
+  statusButtons: { flexDirection: 'row', gap: 8 },
+  statusBtn: { flex: 1, paddingVertical: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', backgroundColor: 'transparent' },
+  statusBtnText: { fontSize: 11, color: 'white', fontWeight: '600' },
   earningsCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, marginHorizontal: SPACING.lg, marginTop: -20, padding: SPACING.lg, ...SHADOWS.medium },
   earningsTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 12 },
   earningsRow: { flexDirection: 'row' },

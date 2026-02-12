@@ -18,7 +18,7 @@ function TabBarIcon({ name, color, badge, size = 28 }: { name: any; color: strin
 }
 
 export default function TabLayout() {
-  const { getCartCount } = useApp();
+  const { getCartCount, user } = useApp();
   const cartCount = getCartCount();
 
   return (
@@ -46,6 +46,7 @@ export default function TabLayout() {
         options={{
           title: 'Beranda',
           tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
+          href: user?.role === 'expert' ? null : '/(tabs)',
         }}
       />
       <Tabs.Screen
@@ -53,13 +54,15 @@ export default function TabLayout() {
         options={{
           title: 'Katalog',
           tabBarIcon: ({ color }) => <TabBarIcon name="grid" color={color} />,
+          href: user?.role === 'expert' ? null : '/(tabs)/catalog',
         }}
       />
       <Tabs.Screen
         name="experts"
         options={{
-          title: 'Konsultasi',
-          tabBarIcon: ({ color }) => <TabBarIcon name="chatbubbles" color={color} />,
+          title: user?.role === 'expert' ? 'Dashboard' : 'Konsultasi',
+          tabBarIcon: ({ color }) => <TabBarIcon name={user?.role === 'expert' ? 'grid' : 'chatbubbles'} color={color} />,
+          href: user?.role === 'expert' ? null : '/(tabs)/experts', // Experts use profile/articles/consultations list (which we need)
         }}
       />
       <Tabs.Screen
@@ -68,6 +71,18 @@ export default function TabLayout() {
           title: 'Artikel',
           tabBarIcon: ({ color }) => <TabBarIcon name="newspaper" color={color} />,
         }}
+      />
+      <Tabs.Screen
+        name="consultations" // This file mimics "experts" but for the expert's own list? No, "experts" is the list of experts. 
+        // We need a way for experts to see their chat list. 
+        // Actually, the user asked for "menu artikel dan list konsultasi atau chat untuk dirinya saja"
+        // Existing "consultations.tsx" seems to be the history/list.
+        options={{
+          title: 'Konsultasi',
+          tabBarIcon: ({ color }) => <TabBarIcon name="chatbubbles" color={color} />,
+          href: user?.role === 'expert' ? '/(tabs)/consultations' : null, // Only for experts? Or both? Consumers access via profile.
+        }}
+        redirect={user?.role !== 'expert'} // Redirect if not expert? No, consumers might need it but via profile
       />
       <Tabs.Screen
         name="profile"

@@ -12,13 +12,13 @@ const Storage = {
     try {
       if (Platform.OS === 'web') { localStorage.setItem(key, value); }
       else { memoryStorage[key] = value; }
-    } catch {}
+    } catch { }
   },
   removeItem: async (key: string): Promise<void> => {
     try {
       if (Platform.OS === 'web') { localStorage.removeItem(key); }
       else { delete memoryStorage[key]; }
-    } catch {}
+    } catch { }
   },
 };
 const memoryStorage: Record<string, string> = {};
@@ -48,6 +48,7 @@ export interface UserProfile {
   name: string; email: string; phone: string; avatar: string;
   role: 'consumer' | 'expert'; trubusCoins: number;
   specialization?: string; experience?: number; fee?: number;
+  status?: 'online' | 'busy' | 'offline'; // Added status
 }
 export interface RegisteredUser extends UserProfile {
   password: string;
@@ -58,6 +59,7 @@ interface AppContextType {
   isLoggedIn: boolean;
   user: UserProfile;
   setUser: (user: UserProfile) => void;
+  updateStatus: (status: UserProfile['status']) => void; // Added updateStatus
   login: (email: string, password: string) => { success: boolean; error?: string };
   register: (data: RegisteredUser) => { success: boolean; error?: string };
   logout: () => void;
@@ -99,34 +101,50 @@ const guestUser: UserProfile = {
 };
 
 const defaultAddresses: Address[] = [
-  { id: 'addr1', label: 'Rumah', recipient: 'Budi Santoso', phone: '081234567890',
+  {
+    id: 'addr1', label: 'Rumah', recipient: 'Budi Santoso', phone: '081234567890',
     address: 'Jl. Merdeka No. 123, RT 05/RW 02, Kel. Menteng', city: 'Jakarta Pusat',
-    province: 'DKI Jakarta', postalCode: '10310', isDefault: true },
-  { id: 'addr2', label: 'Kantor', recipient: 'Budi Santoso', phone: '081234567890',
+    province: 'DKI Jakarta', postalCode: '10310', isDefault: true
+  },
+  {
+    id: 'addr2', label: 'Kantor', recipient: 'Budi Santoso', phone: '081234567890',
     address: 'Gedung Graha Mandiri Lt. 5, Jl. Imam Bonjol No. 61', city: 'Jakarta Pusat',
-    province: 'DKI Jakarta', postalCode: '10310', isDefault: false },
+    province: 'DKI Jakarta', postalCode: '10310', isDefault: false
+  },
 ];
 
 const defaultNotifications: Notification[] = [
-  { id: 'n1', title: 'Selamat Datang!', message: 'Selamat datang di Halo Toko Trubus. Nikmati konsultasi pertama GRATIS!',
-    type: 'promo', read: false, createdAt: '2026-02-11T08:00:00Z' },
-  { id: 'n2', title: 'Promo Pupuk Organik', message: 'Diskon 20% untuk semua pupuk organik. Berlaku hingga akhir bulan!',
-    type: 'promo', read: false, createdAt: '2026-02-10T10:00:00Z' },
-  { id: 'n3', title: 'Tips Berkebun', message: 'Musim hujan tiba! Baca tips melindungi tanaman dari genangan air.',
-    type: 'info', read: true, createdAt: '2026-02-09T14:00:00Z' },
+  {
+    id: 'n1', title: 'Selamat Datang!', message: 'Selamat datang di Halo Toko Trubus. Nikmati konsultasi pertama GRATIS!',
+    type: 'promo', read: false, createdAt: '2026-02-11T08:00:00Z'
+  },
+  {
+    id: 'n2', title: 'Promo Pupuk Organik', message: 'Diskon 20% untuk semua pupuk organik. Berlaku hingga akhir bulan!',
+    type: 'promo', read: false, createdAt: '2026-02-10T10:00:00Z'
+  },
+  {
+    id: 'n3', title: 'Tips Berkebun', message: 'Musim hujan tiba! Baca tips melindungi tanaman dari genangan air.',
+    type: 'info', read: true, createdAt: '2026-02-09T14:00:00Z'
+  },
 ];
 
 // Pre-seeded users for demo
 const seedUsers: RegisteredUser[] = [
-  { name: 'Budi Santoso', email: 'budi@email.com', phone: '081234567890', password: '123456',
+  {
+    name: 'Budi Santoso', email: 'budi@email.com', phone: '081234567890', password: '123456',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
-    role: 'consumer', trubusCoins: 250000 },
-  { name: 'Dr. Ir. Bambang Suryadi', email: 'bambang@email.com', phone: '081298765432', password: '123456',
+    role: 'consumer', trubusCoins: 250000
+  },
+  {
+    name: 'Dr. Ir. Bambang Suryadi', email: 'bambang@email.com', phone: '081298765432', password: '123456',
     avatar: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&h=200&fit=crop&crop=face',
-    role: 'expert', trubusCoins: 1500000, specialization: 'Ahli Hama & Penyakit Tanaman', experience: 15, fee: 75000 },
-  { name: 'Dr. Rina Wulandari', email: 'rina@email.com', phone: '081345678901', password: '123456',
+    role: 'expert', trubusCoins: 1500000, specialization: 'Ahli Hama & Penyakit Tanaman', experience: 15, fee: 75000, status: 'online'
+  },
+  {
+    name: 'Dr. Rina Wulandari', email: 'rina@email.com', phone: '081345678901', password: '123456',
     avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&h=200&fit=crop&crop=face',
-    role: 'expert', trubusCoins: 980000, specialization: 'Ahli Hidroponik & Urban Farming', experience: 10, fee: 85000 },
+    role: 'expert', trubusCoins: 980000, specialization: 'Ahli Hidroponik & Urban Farming', experience: 10, fee: 85000, status: 'busy'
+  },
 ];
 
 const AppContext = createContext<AppContextType>({} as AppContextType);
@@ -167,7 +185,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setUserState(session);
           setIsLoggedIn(true);
         }
-      } catch {}
+      } catch { }
     };
     loadData();
   }, []);
@@ -217,6 +235,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setUser = useCallback((u: UserProfile) => {
     setUserState(u);
     if (isLoggedIn) Storage.setItem('session', JSON.stringify(u));
+  }, [isLoggedIn]);
+
+  const updateStatus = useCallback((status: UserProfile['status']) => {
+    setUserState(prev => {
+      const updated = { ...prev, status };
+      if (isLoggedIn) Storage.setItem('session', JSON.stringify(updated));
+      return updated;
+    });
   }, [isLoggedIn]);
 
   // Cart
@@ -301,7 +327,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
-      isLoggedIn, user, setUser, login, register, logout, registeredUsers,
+      isLoggedIn, user, setUser, updateStatus, login, register, logout, registeredUsers,
       isOnboarded, setIsOnboarded: handleSetOnboarded,
       cart, addToCart, removeFromCart, updateCartQuantity, clearCart, getCartTotal, getCartCount,
       addresses, addAddress, removeAddress, setDefaultAddress,

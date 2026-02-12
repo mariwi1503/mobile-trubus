@@ -76,13 +76,13 @@ export default function OnboardingScreen() {
                 <Ionicons name={slide.icon as any} size={60} color={COLORS.white} />
               </View>
             </View>
-            {index === 0 && (
+            {/* {index === 0 && (
               <Image
                 source={{ uri: 'https://d64gsuwffb70l.cloudfront.net/698c32f324d41fa898aee39d_1770799675965_a9648211.png' }}
                 style={styles.mascot}
                 resizeMode="contain"
               />
-            )}
+            )} */}
             <Text style={styles.title}>{slide.title}</Text>
             <Text style={styles.subtitle}>{slide.subtitle}</Text>
           </View>
