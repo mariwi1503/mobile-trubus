@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
@@ -35,46 +35,61 @@ export default function OrdersScreen() {
   });
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.text} />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Pesanan Saya</Text>
-        <View style={{ width: 22 }} />
+        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll} contentContainerStyle={{ paddingHorizontal: SPACING.lg }}>
-        {TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTab === tab && styles.tabActive]}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* TAB CATEGORY - Sekarang tingginya menyesuaikan konten */}
+      <View style={styles.tabWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabScrollContent}
+        >
+          {TABS.map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, activeTab === tab && styles.tabActive]}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+                {tab}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
+      {/* LIST ORDERS */}
       {filteredOrders.length === 0 ? (
         <View style={styles.empty}>
-          <Ionicons name="receipt-outline" size={48} color={COLORS.textLight} />
+          <Ionicons name="receipt-outline" size={64} color={COLORS.textLight} />
           <Text style={styles.emptyText}>Belum ada pesanan</Text>
         </View>
       ) : (
         <FlatList
           data={filteredOrders}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingBottom: 20 }}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
           renderItem={({ item }) => {
-            const status = STATUS_MAP[item.status];
+            const status = STATUS_MAP[item.status] || STATUS_MAP.pending_payment;
             const date = new Date(item.createdAt);
+
             return (
               <View style={styles.orderCard}>
                 <View style={styles.orderHeader}>
                   <View>
-                    <Text style={styles.orderId}>{item.id}</Text>
-                    <Text style={styles.orderDate}>{date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+                    <Text style={styles.orderId}>ID: {item.id.toUpperCase()}</Text>
+                    <Text style={styles.orderDate}>
+                      {date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </Text>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
                     <Ionicons name={status.icon as any} size={12} color={status.color} />
@@ -84,8 +99,8 @@ export default function OrdersScreen() {
 
                 {item.items && item.items.length > 0 && (
                   <View style={styles.itemsSection}>
-                    {item.items.slice(0, 2).map((cartItem) => (
-                      <Text key={cartItem.productId} style={styles.itemText} numberOfLines={1}>
+                    {item.items.slice(0, 2).map((cartItem, idx) => (
+                      <Text key={idx} style={styles.itemText} numberOfLines={1}>
                         {cartItem.quantity}x {cartItem.name}
                       </Text>
                     ))}
@@ -97,7 +112,7 @@ export default function OrdersScreen() {
 
                 <View style={styles.orderFooter}>
                   <View>
-                    <Text style={styles.totalLabel}>Total Pesanan</Text>
+                    <Text style={styles.totalLabel}>Total Belanja</Text>
                     <Text style={styles.totalAmount}>Rp {item.totalAmount.toLocaleString('id-ID')}</Text>
                   </View>
                   {item.status === 'pending_payment' && (
@@ -114,49 +129,159 @@ export default function OrdersScreen() {
           }}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: {
+    flex: 1,
+    backgroundColor: '#F8F9FA'
+  },
   header: {
-    backgroundColor: COLORS.white, paddingTop: 48, paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderBottomWidth: 1, borderBottomColor: COLORS.divider,
+    backgroundColor: COLORS.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
   },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: COLORS.text },
-  tabScroll: { backgroundColor: COLORS.white, paddingVertical: SPACING.sm },
-  tab: { paddingHorizontal: 16, paddingVertical: 8, marginRight: 4, borderRadius: RADIUS.full },
-  tabActive: { backgroundColor: COLORS.primary },
-  tabText: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '500' },
-  tabTextActive: { color: COLORS.white, fontWeight: '600' },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { fontSize: 16, color: COLORS.textSecondary, marginTop: 12 },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text
+  },
+  tabWrapper: {
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+  },
+  tabScrollContent: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm, // Memberikan padding atas-bawah yang seimbang
+    gap: 8, // Jarak antar tab (jika React Native versi baru) atau gunakan margin
+  },
+  tab: {
+    paddingHorizontal: 16,
+    height: 36, // Mengunci tinggi tab agar seragam
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: RADIUS.full,
+    marginRight: 8,
+    backgroundColor: '#F1F3F5',
+  },
+  tabActive: {
+    backgroundColor: COLORS.primary
+  },
+  tabText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: '500'
+  },
+  tabTextActive: {
+    color: COLORS.white,
+    fontWeight: '600'
+  },
+  listContent: {
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: 30,
+    paddingTop: SPACING.sm
+  },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 100
+  },
+  emptyText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    marginTop: 16
+  },
   orderCard: {
-    backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
-    padding: SPACING.lg, marginTop: SPACING.md, ...SHADOWS.small,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    marginTop: SPACING.md,
+    ...SHADOWS.small,
   },
-  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  orderId: { fontSize: 13, fontWeight: '700', color: COLORS.text },
-  orderDate: { fontSize: 11, color: COLORS.textLight, marginTop: 2 },
+  orderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start'
+  },
+  orderId: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+    textTransform: 'uppercase'
+  },
+  orderDate: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    marginTop: 2
+  },
   statusBadge: {
-    flexDirection: 'row', alignItems: 'center', borderRadius: RADIUS.full,
-    paddingHorizontal: 8, paddingVertical: 4, gap: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    gap: 4,
   },
-  statusText: { fontSize: 11, fontWeight: '600' },
-  itemsSection: { marginTop: SPACING.md, paddingTop: SPACING.sm, borderTopWidth: 1, borderTopColor: COLORS.divider },
-  itemText: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 2 },
-  moreItems: { fontSize: 11, color: COLORS.primary, fontWeight: '500', marginTop: 2 },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  itemsSection: {
+    marginTop: SPACING.md,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.divider
+  },
+  itemText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginBottom: 4
+  },
+  moreItems: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginTop: 2
+  },
   orderFooter: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginTop: SPACING.md, paddingTop: SPACING.sm, borderTopWidth: 1, borderTopColor: COLORS.divider,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: SPACING.md,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.divider,
   },
-  totalLabel: { fontSize: 11, color: COLORS.textSecondary },
-  totalAmount: { fontSize: 15, fontWeight: '700', color: COLORS.primaryDark },
+  totalLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary
+  },
+  totalAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.primaryDark
+  },
   payNowBtn: {
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.sm,
-    paddingHorizontal: 16, paddingVertical: 8,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
   },
-  payNowText: { color: COLORS.white, fontSize: 13, fontWeight: '700' },
+  payNowText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '700'
+  },
 });
