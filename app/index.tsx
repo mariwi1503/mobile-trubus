@@ -9,11 +9,13 @@ export default function SplashScreen() {
   const { isOnboarded } = useApp();
   const [fadeAnim] = useState(new Animated.Value(0));
   const [scaleAnim] = useState(new Animated.Value(0.8));
+  const [progressAnim] = useState(new Animated.Value(0));
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
       Animated.spring(scaleAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
+      Animated.timing(progressAnim, { toValue: 100, duration: 2500, useNativeDriver: false }), // animate progress
     ]).start();
 
     const timer = setTimeout(() => {
@@ -26,6 +28,11 @@ export default function SplashScreen() {
 
     return () => clearTimeout(timer);
   }, [isOnboarded]);
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+  });
 
   return (
     <View style={styles.container}>
@@ -41,7 +48,7 @@ export default function SplashScreen() {
       </Animated.View>
       <Animated.View style={[styles.bottomSection, { opacity: fadeAnim }]}>
         <View style={styles.loadingBar}>
-          <Animated.View style={[styles.loadingFill]} />
+          <Animated.View style={[styles.loadingFill, { width: progressWidth }]} />
         </View>
         <Text style={styles.version}>Versi 1.0.0</Text>
       </Animated.View>
@@ -81,7 +88,7 @@ const styles = StyleSheet.create({
     borderRadius: 2, overflow: 'hidden',
   },
   loadingFill: {
-    width: '60%', height: '100%',
+    height: '100%',
     backgroundColor: COLORS.primary, borderRadius: 2,
   },
   version: { fontSize: 12, color: COLORS.textLight, marginTop: 12 },

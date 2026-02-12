@@ -14,6 +14,7 @@ const slides = [
     subtitle: 'Tanya langsung ke ahli pertanian berpengalaman untuk solusi masalah tanaman Anda',
     color: '#4CAF50',
     bgColor: '#E8F5E9',
+    image: require('../assets/images/onboarding1.png'),
   },
   {
     icon: 'cart',
@@ -21,6 +22,7 @@ const slides = [
     subtitle: 'Temukan bibit, pupuk, pestisida, dan alat pertanian berkualitas dengan harga terbaik',
     color: '#FF9800',
     bgColor: '#FFF3E0',
+    image: require('../assets/images/onboarding1.png'),
   },
   {
     icon: 'newspaper',
@@ -28,6 +30,7 @@ const slides = [
     subtitle: 'Baca artikel informatif dan tips berkebun dari para ahli untuk meningkatkan hasil panen',
     color: '#2196F3',
     bgColor: '#E3F2FD',
+    image: require('../assets/images/onboarding1.png'),
   },
 ];
 
@@ -71,18 +74,11 @@ export default function OnboardingScreen() {
       >
         {slides.map((slide, index) => (
           <View key={index} style={[styles.slide, { width }]}>
-            <View style={[styles.iconCircle, { backgroundColor: slide.bgColor }]}>
-              <View style={[styles.iconInner, { backgroundColor: slide.color }]}>
-                <Ionicons name={slide.icon as any} size={60} color={COLORS.white} />
-              </View>
-            </View>
-            {/* {index === 0 && (
-              <Image
-                source={{ uri: 'https://d64gsuwffb70l.cloudfront.net/698c32f324d41fa898aee39d_1770799675965_a9648211.png' }}
-                style={styles.mascot}
-                resizeMode="contain"
-              />
-            )} */}
+            <Image
+              source={slide.image}
+              style={{ width: 300, height: 300, marginBottom: 20 }}
+              resizeMode="contain"
+            />
             <Text style={styles.title}>{slide.title}</Text>
             <Text style={styles.subtitle}>{slide.subtitle}</Text>
           </View>

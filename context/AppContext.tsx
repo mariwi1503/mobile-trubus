@@ -38,7 +38,7 @@ export interface Order {
   status: 'pending_payment' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'completed' | 'cancelled';
   paymentMethod?: string; createdAt: string; store?: string;
   // For expert: client info
-  clientName?: string; clientPhone?: string;
+  clientName?: string; clientPhone?: string; clientAvatar?: string;
 }
 export interface Notification {
   id: string; title: string; message: string;

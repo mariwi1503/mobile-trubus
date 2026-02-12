@@ -7,8 +7,12 @@ import { EXPERTS, EXPERT_CATEGORIES } from '../../data/experts';
 import ExpertCard from '../../components/ExpertCard';
 import SearchBar from '../../components/SearchBar';
 
+import { useApp } from '../../context/AppContext';
+import ConsultationsScreen from '../consultations';
+
 export default function ExpertsScreen() {
   const router = useRouter();
+  const { user } = useApp();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
@@ -26,6 +30,11 @@ export default function ExpertsScreen() {
     }
     return result;
   }, [search, selectedCategory]);
+
+  // If expert, show their consultation history instead of expert list
+  if (user.role === 'expert') {
+    return <ConsultationsScreen isTab={true} />;
+  }
 
   return (
     <View style={styles.container}>

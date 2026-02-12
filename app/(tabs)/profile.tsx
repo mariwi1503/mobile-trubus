@@ -56,7 +56,7 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
 
           {/* Logo */}
           <View style={styles.logoRow}>
-            <Image source={{ uri: 'https://d64gsuwffb70l.cloudfront.net/698c32f324d41fa898aee39d_1770799657846_84477df5.png' }} style={styles.logoSmall} resizeMode="contain" />
+            <Image source={require('../../assets/images/logo.png')} style={styles.logoSmall} resizeMode="contain" />
             <Text style={styles.logoText}>Halo Toko Trubus</Text>
           </View>
 
@@ -260,9 +260,12 @@ function ExpertDashboard() {
           </View>
         ) : (
           [...pending, ...scheduled].slice(0, 5).map((item) => (
-            <View key={item.id} style={styles.requestItem}>
+            <TouchableOpacity key={item.id} style={styles.requestItem} onPress={() => router.push(`/chat/${item.id}`)}>
               <View style={styles.requestIcon}>
-                <Ionicons name="person" size={20} color={COLORS.primary} />
+                <Image
+                  source={{ uri: item.clientAvatar || 'https://ui-avatars.com/api/?name=User' }}
+                  style={{ width: 40, height: 40, borderRadius: 20 }}
+                />
               </View>
               <View style={styles.requestInfo}>
                 <Text style={styles.requestName}>{item.clientName || 'Klien'}</Text>
@@ -275,7 +278,7 @@ function ExpertDashboard() {
                   {item.status === 'paid' ? 'Terjadwal' : 'Pending'}
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
           ))
         )}
       </View>
@@ -454,7 +457,7 @@ function GuestProfile({ onLogin }: { onLogin: () => void }) {
   return (
     <View style={styles.guestContainer}>
       <View style={styles.guestHeader}>
-        <Image source={{ uri: 'https://d64gsuwffb70l.cloudfront.net/698c32f324d41fa898aee39d_1770799675965_a9648211.png' }} style={styles.guestLogo} resizeMode="contain" />
+        <Image source={require('../../assets/images/logo.png')} style={styles.guestLogo} resizeMode="contain" />
         <Text style={styles.guestTitle}>Halo Toko Trubus</Text>
         <Text style={styles.guestSubtitle}>Solusi Tepat, Tanaman Sehat</Text>
       </View>
@@ -542,7 +545,7 @@ const styles = StyleSheet.create({
   // Guest
   guestContainer: { flex: 1, backgroundColor: COLORS.background },
   guestHeader: { backgroundColor: COLORS.primary, paddingTop: 48, paddingBottom: 32, alignItems: 'center', borderBottomLeftRadius: RADIUS.xxl, borderBottomRightRadius: RADIUS.xxl },
-  guestLogo: { width: 80, height: 80 },
+  guestLogo: { width: 100, height: 100 },
   guestTitle: { fontSize: 20, fontWeight: '700', color: COLORS.white, marginTop: 8 },
   guestSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   guestContent: { flex: 1, alignItems: 'center', paddingHorizontal: 32, paddingTop: 24 },
@@ -556,7 +559,7 @@ const styles = StyleSheet.create({
   guestLoginText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
   // Consumer Profile
   header: { backgroundColor: COLORS.primary, paddingTop: 48, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl, borderBottomLeftRadius: RADIUS.xxl, borderBottomRightRadius: RADIUS.xxl },
-  profileRow: { flexDirection: 'row', alignItems: 'center' },
+  profileRow: { flexDirection: 'row', alignItems: 'center', paddingTop: 20 },
   avatar: { width: 64, height: 64, borderRadius: 32, borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)' },
   profileInfo: { flex: 1, marginLeft: SPACING.md },
   name: { fontSize: 18, fontWeight: '700', color: COLORS.white },
@@ -564,7 +567,7 @@ const styles = StyleSheet.create({
   roleBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start', marginTop: 4 },
   roleText: { fontSize: 10, color: COLORS.white, fontWeight: '600', marginLeft: 3 },
   editBtn: { padding: 8 },
-  coinCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, marginHorizontal: SPACING.lg, marginTop: -20, padding: SPACING.lg, ...SHADOWS.medium },
+  coinCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, marginHorizontal: SPACING.lg, marginTop: 10, padding: SPACING.lg, ...SHADOWS.medium },
   coinCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   coinCardLeft: { flexDirection: 'row', alignItems: 'center' },
   coinIconWrap: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#FFF3E0', alignItems: 'center', justifyContent: 'center', marginRight: SPACING.md },

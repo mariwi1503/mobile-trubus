@@ -9,7 +9,7 @@ import { useApp } from '../../context/AppContext';
 export default function ScheduleScreen() {
   const router = useRouter();
   const { expertId } = useLocalSearchParams();
-  const { addOrder } = useApp();
+  const { addOrder, user } = useApp();
   const expert = EXPERTS.find(e => e.id === expertId);
 
   const [selectedDate, setSelectedDate] = useState('');
@@ -51,6 +51,9 @@ export default function ScheduleScreen() {
       consultationTime: selectedTime,
       totalAmount: expert.fee,
       status: 'pending_payment' as const,
+      clientName: user.name,
+      clientPhone: user.phone,
+      clientAvatar: user.avatar,
       createdAt: new Date().toISOString(),
     };
 
