@@ -64,7 +64,7 @@ export const EXPERTS: Expert[] = [
     name: 'Prof. Siti Nurhaliza, M.Sc.',
     specialization: 'Ahli Kesuburan Tanah',
     category: 'tanah',
-    image: 'https://images.unsplash.com/photo-1594824476967-48c8b964ac31?w=200&h=200&fit=crop&crop=face',
+    image: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop&crop=face',
     rating: 4.8,
     reviews: 287,
     experience: 20,
