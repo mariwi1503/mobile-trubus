@@ -22,7 +22,7 @@ const slides = [
     subtitle: 'Temukan bibit, pupuk, pestisida, dan alat pertanian berkualitas dengan harga terbaik',
     color: '#FF9800',
     bgColor: '#FFF3E0',
-    image: require('../assets/images/onboarding1.png'),
+    image: require('../assets/images/onboarding2.png'),
   },
   {
     icon: 'newspaper',
@@ -30,7 +30,7 @@ const slides = [
     subtitle: 'Baca artikel informatif dan tips berkebun dari para ahli untuk meningkatkan hasil panen',
     color: '#2196F3',
     bgColor: '#E3F2FD',
-    image: require('../assets/images/onboarding1.png'),
+    image: require('../assets/images/onboarding3.png'),
   },
 ];
 
