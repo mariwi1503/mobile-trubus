@@ -24,15 +24,15 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
 
   const handleLogin = () => {
     setError('');
-    if (!email || !password) { setError('Email dan password wajib diisi'); return; }
-    const result = login(email, password);
+    if (!phone || !password) { setError('Nomor Telepon dan password wajib diisi'); return; }
+    const result = login(phone, password);
     if (result.success) { reset(); onClose(); }
     else setError(result.error || 'Login gagal');
   };
 
   const handleRegister = () => {
     setError('');
-    if (!name || !email || !password || !phone) { setError('Semua field wajib diisi'); return; }
+    if (!name || !password || !phone) { setError('Nama, Telepon, dan Password wajib diisi'); return; }
     if (role === 'expert' && !specialization) { setError('Spesialisasi wajib diisi untuk ahli'); return; }
     const data: RegisteredUser = {
       name, email, password, phone, role, avatar: '',
@@ -92,11 +92,20 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
 
                 <Text style={styles.inputLabel}>No. Telepon</Text>
                 <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="08xxxxxxxxxx" placeholderTextColor={COLORS.textLight} keyboardType="phone-pad" />
+
+                <Text style={styles.inputLabel}>Email (Opsional)</Text>
+                <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="email@contoh.com" placeholderTextColor={COLORS.textLight} keyboardType="email-address" autoCapitalize="none" />
               </>
             )}
 
-            <Text style={styles.inputLabel}>Email</Text>
-            <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="email@contoh.com" placeholderTextColor={COLORS.textLight} keyboardType="email-address" autoCapitalize="none" />
+            {mode === 'login' && (
+              <>
+                <Text style={styles.inputLabel}>No. Telepon</Text>
+                <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="08xxxxxxxxxx" placeholderTextColor={COLORS.textLight} keyboardType="phone-pad" />
+              </>
+            )}
+
+
 
             <Text style={styles.inputLabel}>Password</Text>
             <View style={styles.passwordRow}>
@@ -109,11 +118,11 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
             {mode === 'login' && (
               <View style={styles.demoContainer}>
                 <Text style={styles.hintText}>Demo (Klik untuk isi):</Text>
-                <TouchableOpacity onPress={() => { setEmail('budi@email.com'); setPassword('123456'); }}>
-                  <Text style={styles.demoLink}>Konsumen: budi@email.com / 123456</Text>
+                <TouchableOpacity onPress={() => { setPhone('081234567890'); setPassword('123456'); }}>
+                  <Text style={styles.demoLink}>Konsumen: 081234567890 / 123456</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => { setEmail('bambang@email.com'); setPassword('123456'); }}>
-                  <Text style={styles.demoLink}>Ahli: bambang@email.com / 123456</Text>
+                <TouchableOpacity onPress={() => { setPhone('081298765432'); setPassword('123456'); }}>
+                  <Text style={styles.demoLink}>Ahli: 081298765432 / 123456</Text>
                 </TouchableOpacity>
               </View>
             )}

@@ -65,7 +65,7 @@ interface AppContextType {
   user: UserProfile;
   setUser: (user: UserProfile) => void;
   updateStatus: (status: UserProfile['status']) => void; // Added updateStatus
-  login: (email: string, password: string) => { success: boolean; error?: string };
+  login: (phone: string, password: string) => { success: boolean; error?: string };
   register: (data: RegisteredUser) => { success: boolean; error?: string };
   logout: () => void;
   registeredUsers: RegisteredUser[];
@@ -209,9 +209,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   // Auth
-  const login = useCallback((email: string, password: string): { success: boolean; error?: string } => {
-    const found = registeredUsers.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
-    if (!found) return { success: false, error: 'Email atau password salah' };
+  const login = useCallback((phone: string, password: string): { success: boolean; error?: string } => {
+    const found = registeredUsers.find(u => u.phone === phone && u.password === password);
+    if (!found) return { success: false, error: 'Nomor telepon atau password salah' };
     const { password: _, ...profile } = found;
     setUserState(profile);
     setIsLoggedIn(true);
@@ -220,10 +220,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [registeredUsers]);
 
   const register = useCallback((data: RegisteredUser): { success: boolean; error?: string } => {
-    const exists = registeredUsers.find(u => u.email.toLowerCase() === data.email.toLowerCase());
-    if (exists) return { success: false, error: 'Email sudah terdaftar' };
+    const exists = registeredUsers.find(u => u.phone === data.phone);
+    if (exists) return { success: false, error: 'Nomor telepon sudah terdaftar' };
     if (!data.name.trim()) return { success: false, error: 'Nama tidak boleh kosong' };
-    if (!data.email.includes('@')) return { success: false, error: 'Format email tidak valid' };
+    // Email optional or just valid if present
+    if (data.email && !data.email.includes('@')) return { success: false, error: 'Format email tidak valid' };
     if (data.password.length < 6) return { success: false, error: 'Password minimal 6 karakter' };
     if (!data.phone || data.phone.length < 10) return { success: false, error: 'Nomor telepon tidak valid' };
     const newUser: RegisteredUser = {

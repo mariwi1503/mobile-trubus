@@ -33,7 +33,7 @@ const BANNERS = [
     type: 'promo',
     title: 'Diskon 30%',
     subtitle: 'Untuk semua pupuk organik',
-    image: 'https://media.istockphoto.com/id/532270528/id/foto/hasil-bumi-yang-ditanam-secara-organik-tanpa-pestisida.jpg?s=612x612&w=0&k=20&c=uWpS-8IzhGscFHpnDFlLIFDH8QCVQXnSKPRvPRaQguM=',
+    image: 'https://plus.unsplash.com/premium_photo-1686529896385-8a8d581d0225?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OXx8dG9rbyUyMHNheXVyfGVufDB8fDB8fHww',
     color: ['#F57C00', 'rgba(245, 124, 0, 0.8)', 'transparent'],
     icon: 'pricetag',
     route: '/(tabs)/catalog'
@@ -43,7 +43,7 @@ const BANNERS = [
     type: 'promo',
     title: 'Flash Sale',
     subtitle: 'Bibit tanaman premium mulai 15rb',
-    image: 'https://media.istockphoto.com/id/1398965606/id/foto/ayah-dan-anak-perempuan-berbelanja-di-toko-kelontong.jpg?s=612x612&w=0&k=20&c=cIP-RCCA0BHjmhYZ6aolm_T7ygXeFr2tb7QNrjBl7sA=',
+    image: 'https://plus.unsplash.com/premium_photo-1664299231810-29d1caf6f753?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OXx8dG9rbyUyMHBlcnRhbmlhbnxlbnwwfHwwfHx8MA%3D%3D',
     color: ['#C2185B', 'rgba(194, 24, 91, 0.8)', 'transparent'],
     icon: 'flash',
     route: '/(tabs)/catalog'
