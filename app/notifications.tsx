@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const NOTIF_ICONS: Record<string, { icon: string; color: string; bg: string }> = {
   order: { icon: 'receipt', color: '#4CAF50', bg: '#E8F5E9' },
@@ -15,6 +16,7 @@ const NOTIF_ICONS: Record<string, { icon: string; color: string; bg: string }> =
 export default function NotificationsScreen() {
   const router = useRouter();
   const { notifications, markNotificationRead, markAllNotificationsRead, getUnreadCount } = useApp();
+  const insets = useSafeAreaInsets();
 
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -29,7 +31,7 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />

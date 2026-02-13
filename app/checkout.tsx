@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const COURIERS = [
   { id: 'jne', name: 'JNE Regular', est: '3-4 hari', cost: 15000 },
@@ -30,6 +31,7 @@ export default function CheckoutScreen() {
   const [showAddresses, setShowAddresses] = useState(false);
   const [showCouriers, setShowCouriers] = useState(false);
   const [showStores, setShowStores] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const selectedAddress = addresses.find(a => a.id === selectedAddressId);
   const courier = COURIERS.find(c => c.id === selectedCourier);
@@ -234,7 +236,7 @@ export default function CheckoutScreen() {
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Total Berat</Text>
-            <Text style={styles.summaryValue}>{totalWeight >= 1000 ? `${(totalWeight/1000).toFixed(1)} kg` : `${totalWeight} g`}</Text>
+            <Text style={styles.summaryValue}>{totalWeight >= 1000 ? `${(totalWeight / 1000).toFixed(1)} kg` : `${totalWeight} g`}</Text>
           </View>
           <View style={[styles.summaryRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total Pembayaran</Text>
@@ -243,7 +245,7 @@ export default function CheckoutScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom }]}>
         <View style={styles.bottomInfo}>
           <Text style={styles.bottomLabel}>Total</Text>
           <Text style={styles.bottomPrice}>Rp {total.toLocaleString('id-ID')}</Text>

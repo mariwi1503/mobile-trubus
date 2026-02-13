@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   pending_payment: { label: 'Menunggu Pembayaran', color: '#FF9800', bg: '#FFF3E0', icon: 'hourglass' },
@@ -21,6 +22,7 @@ export default function OrdersScreen() {
   const router = useRouter();
   const { orders } = useApp();
   const [activeTab, setActiveTab] = useState('Semua');
+  const insets = useSafeAreaInsets();
 
   const productOrders = orders.filter(o => o.type === 'product');
 
@@ -35,7 +37,7 @@ export default function OrdersScreen() {
   });
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { paddingBottom: insets.bottom }]}>
       {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>

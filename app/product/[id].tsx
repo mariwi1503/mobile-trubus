@@ -5,6 +5,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { PRODUCTS } from '../../data/products';
 import { useApp } from '../../context/AppContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ProductDetailScreen() {
   const router = useRouter();
@@ -12,6 +13,7 @@ export default function ProductDetailScreen() {
   const { addToCart, wishlist, toggleWishlist, getCartCount } = useApp();
   const product = PRODUCTS.find(p => p.id === id);
   const [quantity, setQuantity] = useState(1);
+  const insets = useSafeAreaInsets();
 
   if (!product) {
     return <View style={styles.container}><Text>Produk tidak ditemukan</Text></View>;
@@ -85,21 +87,25 @@ export default function ProductDetailScreen() {
               <Ionicons name="cube-outline" size={14} color={COLORS.textSecondary} />
               <Text style={styles.metaText}>Stok: {product.stock}</Text>
             </View>
+            <View style={styles.metaItem}>
+              <Ionicons name="scale-outline" size={14} color={COLORS.textSecondary} />
+              <Text style={styles.metaText}>{product.weight >= 1000 ? `${product.weight / 1000} kg` : `${product.weight} g`}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Store Info */}
+        {/* Quality Guarantee */}
         <View style={styles.storeCard}>
           <View style={styles.storeIcon}>
-            <Ionicons name="storefront" size={22} color={COLORS.primary} />
+            <Ionicons name="shield-checkmark" size={24} color={COLORS.primary} />
           </View>
           <View style={styles.storeInfo}>
-            <Text style={styles.storeName}>{product.store}</Text>
-            <Text style={styles.storeLocation}>Berat: {product.weight >= 1000 ? `${product.weight/1000} kg` : `${product.weight} g`}</Text>
+            <Text style={styles.storeName}>Jaminan Kualitas Trubus</Text>
+            <Text style={styles.storeLocation}>Produk 100% Original & Bergaransi</Text>
           </View>
-          <TouchableOpacity style={styles.visitStoreBtn}>
-            <Text style={styles.visitStoreText}>Kunjungi</Text>
-          </TouchableOpacity>
+          {/* <TouchableOpacity style={styles.visitStoreBtn}>
+            <Text style={styles.visitStoreText}>Info</Text>
+          </TouchableOpacity> */}
         </View>
 
         {/* Description */}
@@ -132,7 +138,7 @@ export default function ProductDetailScreen() {
       </ScrollView>
 
       {/* Bottom Bar */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom }]}>
         <View style={styles.quantityControl}>
           <TouchableOpacity style={styles.qtyBtn} onPress={() => setQuantity(Math.max(1, quantity - 1))}>
             <Ionicons name="remove" size={18} color={COLORS.primary} />

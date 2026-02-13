@@ -5,12 +5,14 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { EXPERTS } from '../../data/experts';
 import { useApp } from '../../context/AppContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ScheduleScreen() {
   const router = useRouter();
   const { expertId } = useLocalSearchParams();
   const { addOrder, user } = useApp();
   const expert = EXPERTS.find(e => e.id === expertId);
+  const insets = useSafeAreaInsets();
 
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
@@ -158,7 +160,7 @@ export default function ScheduleScreen() {
       </ScrollView>
 
       {/* Bottom CTA */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom }]}>
         <View style={styles.bottomInfo}>
           <Text style={styles.bottomLabel}>Total</Text>
           <Text style={styles.bottomPrice}>Rp {expert.fee.toLocaleString('id-ID')}</Text>

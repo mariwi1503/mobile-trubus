@@ -50,6 +50,11 @@ export interface UserProfile {
   specialization?: string; experience?: number; fee?: number;
   status?: 'online' | 'busy' | 'offline'; // Added status
 }
+export interface Transaction {
+  id: string; type: 'topup' | 'transfer_in' | 'transfer_out' | 'payment';
+  amount: number; date: string; description: string;
+  status: 'success' | 'failed' | 'pending';
+}
 export interface RegisteredUser extends UserProfile {
   password: string;
 }
@@ -94,6 +99,10 @@ interface AppContextType {
   // Wishlist
   wishlist: string[];
   toggleWishlist: (productId: string) => void;
+  // Transactions
+  transactions: Transaction[];
+  topUp: (amount: number, method: string) => void;
+  transfer: (recipient: string, amount: number) => { success: boolean; message: string };
 }
 
 const guestUser: UserProfile = {
@@ -128,6 +137,12 @@ const defaultNotifications: Notification[] = [
   },
 ];
 
+const defaultTransactions: Transaction[] = [
+  { id: 'tx1', type: 'topup', amount: 50000, date: '2026-02-12T10:00:00Z', description: 'Top Up via BCA', status: 'success' },
+  { id: 'tx2', type: 'payment', amount: 25000, date: '2026-02-11T14:30:00Z', description: 'Pembayaran Bibit Mangga', status: 'success' },
+  { id: 'tx3', type: 'transfer_in', amount: 10000, date: '2026-02-10T09:15:00Z', description: 'Transfer dari Budi', status: 'success' },
+];
+
 // Pre-seeded users for demo
 const seedUsers: RegisteredUser[] = [
   {
@@ -160,6 +175,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [orders, setOrders] = useState<Order[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>(defaultNotifications);
   const [wishlist, setWishlist] = useState<string[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>(defaultTransactions);
 
   useEffect(() => {
     const loadData = async () => {
@@ -176,6 +192,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (storedWishlist) setWishlist(JSON.parse(storedWishlist));
         const storedNotifications = await Storage.getItem('notifications');
         if (storedNotifications) setNotifications(JSON.parse(storedNotifications));
+        const storedTransactions = await Storage.getItem('transactions');
+        if (storedTransactions) setTransactions(JSON.parse(storedTransactions));
         const storedRegisteredUsers = await Storage.getItem('registeredUsers');
         if (storedRegisteredUsers) setRegisteredUsers(JSON.parse(storedRegisteredUsers));
         // Restore session
@@ -323,6 +341,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, []);
 
+  // Transactions
+  const topUp = useCallback((amount: number, method: string) => {
+    const newTx: Transaction = {
+      id: `tx_${Date.now()}`, type: 'topup', amount, date: new Date().toISOString(),
+      description: `Top Up via ${method}`, status: 'success',
+    };
+    setTransactions(prev => { const t = [newTx, ...prev]; Storage.setItem('transactions', JSON.stringify(t)); return t; });
+    setUserState(prev => {
+      const updated = { ...prev, trubusCoins: prev.trubusCoins + amount };
+      if (isLoggedIn) Storage.setItem('session', JSON.stringify(updated));
+      return updated;
+    });
+  }, [isLoggedIn]);
+
+  const transfer = useCallback((recipient: string, amount: number): { success: boolean; message: string } => {
+    if (user.trubusCoins < amount) return { success: false, message: 'Saldo tidak mencukupi' };
+
+    // In a real app, we would validate recipient here
+    const newTx: Transaction = {
+      id: `tx_${Date.now()}`, type: 'transfer_out', amount, date: new Date().toISOString(),
+      description: `Transfer ke ${recipient}`, status: 'success',
+    };
+    setTransactions(prev => { const t = [newTx, ...prev]; Storage.setItem('transactions', JSON.stringify(t)); return t; });
+    setUserState(prev => {
+      const updated = { ...prev, trubusCoins: prev.trubusCoins - amount };
+      if (isLoggedIn) Storage.setItem('session', JSON.stringify(updated));
+      return updated;
+    });
+    return { success: true, message: 'Transfer berhasil' };
+  }, [user.trubusCoins, isLoggedIn]);
+
   const handleSetOnboarded = useCallback((v: boolean) => { setIsOnboarded(v); Storage.setItem('onboarded', v ? 'true' : 'false'); }, []);
 
   return (
@@ -334,6 +383,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       orders, addOrder, updateOrderStatus, updateOrderPayment,
       notifications, addNotification, markNotificationRead, markAllNotificationsRead, getUnreadCount,
       wishlist, toggleWishlist,
+      transactions, topUp, transfer,
     }}>
       {children}
     </AppContext.Provider>

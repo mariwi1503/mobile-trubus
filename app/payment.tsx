@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const PAYMENT_METHODS = [
   {
@@ -48,6 +49,7 @@ export default function PaymentScreen() {
   const { orders, updateOrderPayment, user, setUser } = useApp();
   const [selectedMethod, setSelectedMethod] = useState('');
   const [showDetail, setShowDetail] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const order = orders.find(o => o.id === orderId);
   if (!order) {
@@ -239,7 +241,7 @@ export default function PaymentScreen() {
         ))}
       </ScrollView>
 
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom }]}>
         <View style={styles.bottomInfo}>
           <Text style={styles.bottomLabel}>Total</Text>
           <Text style={styles.bottomPrice}>Rp {order.totalAmount.toLocaleString('id-ID')}</Text>

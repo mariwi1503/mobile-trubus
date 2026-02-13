@@ -4,11 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { ARTICLES } from '../../data/articles';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ArticleDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const article = ARTICLES.find(a => a.id === id);
+  const insets = useSafeAreaInsets();
 
   if (!article) {
     return (
@@ -28,7 +30,7 @@ export default function ArticleDetailScreen() {
       await Share.share({
         message: `${article.title}\n\nBaca selengkapnya di Halo Toko Trubus`,
       });
-    } catch {}
+    } catch { }
   };
 
   const formatDate = (dateStr: string) => {
@@ -61,7 +63,7 @@ export default function ArticleDetailScreen() {
   const relatedArticles = ARTICLES.filter(a => a.category === article.category && a.id !== article.id).slice(0, 3);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Hero Image */}
         <View style={styles.heroContainer}>

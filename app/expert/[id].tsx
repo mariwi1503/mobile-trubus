@@ -4,11 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { EXPERTS } from '../../data/experts';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ExpertDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const expert = EXPERTS.find(e => e.id === id);
+  const insets = useSafeAreaInsets();
 
   if (!expert) {
     return (
@@ -126,7 +128,7 @@ export default function ExpertDetailScreen() {
       </ScrollView>
 
       {/* Bottom CTA */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom }]}>
         <TouchableOpacity style={styles.chatBtn}>
           <Ionicons name="chatbubble-outline" size={22} color={COLORS.primary} />
         </TouchableOpacity>

@@ -264,23 +264,23 @@ export default function HomeScreen() {
         </View>
 
         {/* Trubus Coins */}
-        {/* <View style={styles.sectionPadded}>
-          <TouchableOpacity style={styles.coinCard} onPress={() => router.push('/(tabs)/profile')}>
+        <View style={styles.sectionPadded}>
+          <TouchableOpacity style={styles.coinCard} onPress={() => router.push('/top-up')}>
             <View style={styles.coinLeft}>
               <View style={styles.coinIconWrap}>
                 <Ionicons name="wallet" size={24} color={COLORS.coinColor} />
               </View>
               <View>
-                <Text style={styles.coinLabel}>Trubus Coin</Text>
+                <Text style={styles.coinLabel}>Trubus Pay</Text>
                 <Text style={styles.coinAmount}>Rp {user.trubusCoins.toLocaleString('id-ID')}</Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.topUpBtn}>
+            <TouchableOpacity style={styles.topUpBtn} onPress={() => router.push('/top-up')}>
               <Ionicons name="add-circle" size={16} color={COLORS.primary} />
               <Text style={styles.topUpText}>Top Up</Text>
             </TouchableOpacity>
           </TouchableOpacity>
-        </View> */}
+        </View>
 
         {/* Online Experts */}
         <View style={styles.section}>

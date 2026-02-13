@@ -4,10 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function CartScreen() {
   const router = useRouter();
   const { cart, updateCartQuantity, removeFromCart, getCartTotal, clearCart } = useApp();
+  const insets = useSafeAreaInsets();
 
   const handleRemove = (productId: string, name: string) => {
     Alert.alert('Hapus Item', `Hapus ${name} dari keranjang?`, [
@@ -45,52 +47,39 @@ export default function CartScreen() {
         </View>
       ) : (
         <>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
-            {/* Group by store */}
-            {Object.entries(
-              cart.reduce((acc, item) => {
-                if (!acc[item.store]) acc[item.store] = [];
-                acc[item.store].push(item);
-                return acc;
-              }, {} as Record<string, typeof cart>)
-            ).map(([store, items]) => (
-              <View key={store} style={styles.storeGroup}>
-                <View style={styles.storeHeader}>
-                  <Ionicons name="storefront" size={16} color={COLORS.primary} />
-                  <Text style={styles.storeName}>{store}</Text>
-                </View>
-                {items.map((item) => (
-                  <View key={item.productId} style={styles.cartItem}>
-                    <Image source={{ uri: item.image }} style={styles.itemImage} />
-                    <View style={styles.itemInfo}>
-                      <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
-                      <Text style={styles.itemPrice}>Rp {item.price.toLocaleString('id-ID')}</Text>
-                      <View style={styles.itemActions}>
-                        <View style={styles.qtyControl}>
-                          <TouchableOpacity style={styles.qtyBtn} onPress={() => {
-                            if (item.quantity <= 1) handleRemove(item.productId, item.name);
-                            else updateCartQuantity(item.productId, item.quantity - 1);
-                          }}>
-                            <Ionicons name="remove" size={16} color={COLORS.primary} />
-                          </TouchableOpacity>
-                          <Text style={styles.qtyText}>{item.quantity}</Text>
-                          <TouchableOpacity style={styles.qtyBtn} onPress={() => updateCartQuantity(item.productId, item.quantity + 1)}>
-                            <Ionicons name="add" size={16} color={COLORS.primary} />
-                          </TouchableOpacity>
-                        </View>
-                        <TouchableOpacity onPress={() => handleRemove(item.productId, item.name)}>
-                          <Ionicons name="trash-outline" size={18} color={COLORS.accent} />
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 + insets.bottom }}>
+            <View style={styles.storeGroup}>
+              {cart.map((item) => (
+                <View key={item.productId} style={styles.cartItem}>
+                  <Image source={{ uri: item.image }} style={styles.itemImage} />
+                  <View style={styles.itemInfo}>
+                    <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
+                    <Text style={styles.itemPrice}>Rp {item.price.toLocaleString('id-ID')}</Text>
+                    <View style={styles.itemActions}>
+                      <View style={styles.qtyControl}>
+                        <TouchableOpacity style={styles.qtyBtn} onPress={() => {
+                          if (item.quantity <= 1) handleRemove(item.productId, item.name);
+                          else updateCartQuantity(item.productId, item.quantity - 1);
+                        }}>
+                          <Ionicons name="remove" size={16} color={COLORS.primary} />
+                        </TouchableOpacity>
+                        <Text style={styles.qtyText}>{item.quantity}</Text>
+                        <TouchableOpacity style={styles.qtyBtn} onPress={() => updateCartQuantity(item.productId, item.quantity + 1)}>
+                          <Ionicons name="add" size={16} color={COLORS.primary} />
                         </TouchableOpacity>
                       </View>
+                      <TouchableOpacity onPress={() => handleRemove(item.productId, item.name)}>
+                        <Ionicons name="trash-outline" size={18} color={COLORS.accent} />
+                      </TouchableOpacity>
                     </View>
                   </View>
-                ))}
-              </View>
-            ))}
+                </View>
+              ))}
+            </View>
           </ScrollView>
 
           {/* Bottom Bar */}
-          <View style={styles.bottomBar}>
+          <View style={[styles.bottomBar, { paddingBottom: insets.bottom }]}>
             <View style={styles.totalSection}>
               <Text style={styles.totalLabel}>Total</Text>
               <Text style={styles.totalAmount}>Rp {getCartTotal().toLocaleString('id-ID')}</Text>

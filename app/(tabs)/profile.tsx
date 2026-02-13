@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { useApp, RegisteredUser } from '../../context/AppContext';
+import { useAlert } from '../../context/AlertContext';
 
 // ─── Auth Modal ───────────────────────────────────────────────
 function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -17,6 +18,7 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
   const [specialization, setSpecialization] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const { showAlert } = useAlert();
 
   const reset = () => { setEmail(''); setPassword(''); setName(''); setPhone(''); setRole('consumer'); setSpecialization(''); setError(''); };
 
@@ -38,7 +40,7 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
       ...(role === 'expert' ? { specialization, experience: 1, fee: 50000 } : {}),
     };
     const result = register(data);
-    if (result.success) { reset(); onClose(); Alert.alert('Selamat!', 'Registrasi berhasil! Anda mendapat bonus 50.000 Trubus Coin.'); }
+    if (result.success) { reset(); onClose(); showAlert('Selamat!', 'Registrasi berhasil! Anda mendapat bonus 50.000 Trubus Coin.'); }
     else setError(result.error || 'Registrasi gagal');
   };
 
@@ -138,6 +140,7 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
 function ExpertDashboard() {
   const router = useRouter();
   const { user, orders, logout, updateStatus } = useApp();
+  const { showAlert } = useAlert();
 
   const myConsultations = orders.filter(o => o.type === 'consultation');
   const pending = myConsultations.filter(o => o.status === 'pending_payment');
@@ -215,10 +218,11 @@ function ExpertDashboard() {
             <Text style={styles.earningsAmount}>Rp {totalEarnings.toLocaleString('id-ID')}</Text>
           </View>
         </View>
-        <View style={styles.coinRow}>
+        <TouchableOpacity style={styles.coinRow} onPress={() => router.push('/top-up')}>
           <Ionicons name="wallet" size={18} color={COLORS.coinColor} />
           <Text style={styles.coinText}>Saldo: Rp {user.trubusCoins.toLocaleString('id-ID')}</Text>
-        </View>
+          <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+        </TouchableOpacity>
       </View>
 
       {/* Stats Grid */}
@@ -318,8 +322,9 @@ function ExpertDashboard() {
           { icon: 'notifications-outline', label: 'Notifikasi', route: '/notifications', color: '#9C27B0' },
           { icon: 'settings-outline', label: 'Pengaturan Profil', route: '', color: '#607D8B' },
           { icon: 'help-circle-outline', label: 'Pusat Bantuan', route: '', color: '#00BCD4' },
+          { icon: 'help-circle-outline', label: 'Pusat Bantuan', route: '', color: '#00BCD4' },
         ].map((item, i) => (
-          <TouchableOpacity key={i} style={styles.menuItem} onPress={() => item.route ? router.push(item.route as any) : Alert.alert('Info', 'Fitur segera hadir!')}>
+          <TouchableOpacity key={i} style={styles.menuItem} onPress={() => item.route ? router.push(item.route as any) : showAlert('Info', 'Fitur segera hadir!')}>
             <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
               <Ionicons name={item.icon as any} size={20} color={item.color} />
             </View>
@@ -329,7 +334,7 @@ function ExpertDashboard() {
         ))}
       </View>
 
-      <TouchableOpacity style={styles.logoutBtn} onPress={() => Alert.alert('Keluar', 'Yakin ingin keluar?', [{ text: 'Batal' }, { text: 'Keluar', style: 'destructive', onPress: logout }])}>
+      <TouchableOpacity style={styles.logoutBtn} onPress={() => showAlert('Keluar', 'Yakin ingin keluar?', [{ text: 'Batal', style: 'cancel' }, { text: 'Keluar', style: 'destructive', onPress: logout }])}>
         <Ionicons name="log-out-outline" size={20} color={COLORS.accent} />
         <Text style={styles.logoutText}>Keluar</Text>
       </TouchableOpacity>
@@ -342,6 +347,7 @@ function ExpertDashboard() {
 function ConsumerProfile() {
   const router = useRouter();
   const { user, orders, getUnreadCount, logout } = useApp();
+  const { showAlert } = useAlert();
   const pendingOrders = orders.filter(o => o.type === 'product' && o.status === 'pending_payment').length;
   const paidOrders = orders.filter(o => o.type === 'product' && (o.status === 'paid' || o.status === 'processing')).length;
   const shippedOrders = orders.filter(o => o.type === 'product' && o.status === 'shipped').length;
@@ -396,7 +402,7 @@ function ConsumerProfile() {
           {[{ icon: 'add-circle', label: 'Top Up', bg: '#E8F5E9', color: COLORS.primary },
           { icon: 'swap-horizontal', label: 'Transfer', bg: '#FFF3E0', color: COLORS.accentOrange },
           { icon: 'time', label: 'Riwayat', bg: '#E3F2FD', color: COLORS.info }].map((a, i) => (
-            <TouchableOpacity key={i} style={styles.coinAction}>
+            <TouchableOpacity key={i} style={styles.coinAction} onPress={() => router.push('/top-up')}>
               <View style={[styles.coinActionIcon, { backgroundColor: a.bg }]}><Ionicons name={a.icon as any} size={20} color={a.color} /></View>
               <Text style={styles.coinActionText}>{a.label}</Text>
             </TouchableOpacity>
@@ -430,7 +436,7 @@ function ConsumerProfile() {
           <View style={styles.menuCard}>
             {section.items.map((item, index) => (
               <TouchableOpacity key={item.id} style={[styles.menuItem, index < section.items.length - 1 && styles.menuItemBorder]}
-                onPress={() => item.route ? router.push(item.route as any) : Alert.alert('Info', 'Fitur segera hadir!')}>
+                onPress={() => item.route ? router.push(item.route as any) : showAlert('Info', 'Fitur segera hadir!')}>
                 <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}><Ionicons name={item.icon as any} size={20} color={item.color} /></View>
                 <Text style={styles.menuLabel}>{item.label}</Text>
                 <View style={styles.menuRight}>
@@ -443,7 +449,7 @@ function ConsumerProfile() {
         </View>
       ))}
 
-      <TouchableOpacity style={styles.logoutBtn} onPress={() => Alert.alert('Keluar', 'Yakin ingin keluar?', [{ text: 'Batal' }, { text: 'Keluar', style: 'destructive', onPress: logout }])}>
+      <TouchableOpacity style={styles.logoutBtn} onPress={() => showAlert('Keluar', 'Yakin ingin keluar?', [{ text: 'Batal', style: 'cancel' }, { text: 'Keluar', style: 'destructive', onPress: logout }])}>
         <Ionicons name="log-out-outline" size={20} color={COLORS.accent} /><Text style={styles.logoutText}>Keluar</Text>
       </TouchableOpacity>
       <Text style={styles.version}>Halo Toko Trubus v1.0.0</Text>

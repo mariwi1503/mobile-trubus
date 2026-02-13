@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { EXPERTS } from '../data/experts';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
     pending_payment: { label: 'Menunggu Pembayaran', color: '#FF9800', bg: '#FFF3E0' },
@@ -16,11 +17,12 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
 export default function ConsultationsScreen({ isTab = false }: { isTab?: boolean }) {
     const router = useRouter();
     const { orders, user } = useApp();
+    const insets = useSafeAreaInsets();
 
     const consultations = orders.filter(o => o.type === 'consultation');
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { paddingBottom: insets.bottom }]}>
             <View style={styles.header}>
                 {!isTab && (
                     <TouchableOpacity onPress={() => router.back()}>

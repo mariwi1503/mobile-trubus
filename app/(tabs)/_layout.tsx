@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { View, Text, StyleSheet } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function TabBarIcon({ name, color, badge, size = 28 }: { name: any; color: string; badge?: number; size?: number }) {
   return (
@@ -20,6 +21,7 @@ function TabBarIcon({ name, color, badge, size = 28 }: { name: any; color: strin
 export default function TabLayout() {
   const { getCartCount, user } = useApp();
   const cartCount = getCartCount();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -31,8 +33,8 @@ export default function TabLayout() {
           backgroundColor: COLORS.white,
           borderTopColor: COLORS.divider,
           borderTopWidth: 1,
-          height: 90,
-          paddingBottom: 30,
+          height: 100,
+          paddingBottom: insets.bottom,
           paddingTop: 10,
         },
         tabBarLabelStyle: {
