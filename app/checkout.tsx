@@ -1,11 +1,20 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ImageSourcePropType } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { useAlert } from '../context/AlertContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const COURIER_LOGOS: Record<string, ImageSourcePropType> = {
+  jne: require('../assets/images/logos/jne.jpg'),
+  jne_yes: require('../assets/images/logos/jne_yes.jpg'),
+  jnt: require('../assets/images/logos/jnt.jpg'),
+  sicepat: require('../assets/images/logos/sicepat.jpg'),
+  sicepat_best: require('../assets/images/logos/sicepat_best.jpg'),
+  anteraja: require('../assets/images/logos/anteraja.jpg'),
+};
 
 const COURIERS = [
   { id: 'jne', name: 'JNE Regular', est: '3-4 hari', cost: 15000 },
@@ -204,6 +213,9 @@ export default function CheckoutScreen() {
                 <View style={styles.optionRadio}>
                   {selectedCourier === c.id && <View style={styles.optionRadioInner} />}
                 </View>
+                {COURIER_LOGOS[c.id] && (
+                  <Image source={COURIER_LOGOS[c.id]} style={styles.courierLogo} resizeMode="contain" />
+                )}
                 <View style={{ flex: 1 }}>
                   <Text style={styles.optionLabel}>{c.name}</Text>
                   <Text style={styles.optionText}>Estimasi: {c.est}</Text>
@@ -298,6 +310,7 @@ const styles = StyleSheet.create({
   optionLabel: { fontSize: 13, fontWeight: '600', color: COLORS.text },
   optionText: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
   courierCost: { fontSize: 13, fontWeight: '700', color: COLORS.primaryDark },
+  courierLogo: { width: 36, height: 36, marginRight: 10, borderRadius: 6 },
   addAddressBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     padding: SPACING.md, gap: 6,

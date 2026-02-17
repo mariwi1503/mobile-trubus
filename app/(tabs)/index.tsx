@@ -509,6 +509,7 @@ const styles = StyleSheet.create({
   quickMenu: {
     flexDirection: 'row', flexWrap: 'wrap',
     paddingHorizontal: SPACING.lg, justifyContent: 'space-between',
+    backgroundColor: COLORS.white, borderRadius: RADIUS.lg, marginHorizontal: SPACING.lg, paddingVertical: SPACING.md
   },
   quickMenuItem: { width: '25%', alignItems: 'center', marginBottom: SPACING.md },
   quickMenuIcon: {

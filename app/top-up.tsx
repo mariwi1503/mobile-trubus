@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image, ImageSourcePropType } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { useAlert } from '../context/AlertContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const TOPUP_LOGOS: Record<string, ImageSourcePropType> = {
+    bca: require('../assets/images/logos/bca.png'),
+    mandiri: require('../assets/images/logos/mandiri.png'),
+    gopay: require('../assets/images/logos/gopay.png'),
+    ovo: require('../assets/images/logos/ovo.png'),
+};
 
 const PAYMENT_METHODS = [
     { id: 'bca', name: 'BCA Virtual Account', icon: 'card' },
@@ -163,7 +170,11 @@ export default function TopUpScreen() {
                                 style={[styles.methodCard, selectedMethod === method.id && styles.methodCardActive]}
                                 onPress={() => setSelectedMethod(method.id)}
                             >
-                                <Ionicons name={method.icon as any} size={24} color={selectedMethod === method.id ? COLORS.primary : COLORS.textSecondary} />
+                                {TOPUP_LOGOS[method.id] ? (
+                                    <Image source={TOPUP_LOGOS[method.id]} style={styles.methodLogo} resizeMode="contain" />
+                                ) : (
+                                    <Ionicons name={method.icon as any} size={24} color={selectedMethod === method.id ? COLORS.primary : COLORS.textSecondary} />
+                                )}
                                 <Text style={[styles.methodName, selectedMethod === method.id && styles.methodNameActive]}>{method.name}</Text>
                                 {selectedMethod === method.id && (
                                     <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />
@@ -288,6 +299,7 @@ const styles = StyleSheet.create({
     },
     methodCardActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryBg },
     methodName: { flex: 1, marginLeft: 12, fontSize: 14, color: COLORS.text, fontWeight: '500' },
+    methodLogo: { width: 32, height: 32, borderRadius: 4 },
     methodNameActive: { color: COLORS.primary, fontWeight: '600' },
     actionBtn: {
         backgroundColor: COLORS.primary, borderRadius: RADIUS.md, paddingVertical: 16,

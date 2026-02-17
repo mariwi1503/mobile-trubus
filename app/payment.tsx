@@ -1,11 +1,23 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ImageSourcePropType } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { useAlert } from '../context/AlertContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const LOGO_MAP: Record<string, ImageSourcePropType> = {
+  bca: require('../assets/images/logos/bca.png'),
+  bni: require('../assets/images/logos/bni.png'),
+  bri: require('../assets/images/logos/bri.png'),
+  mandiri: require('../assets/images/logos/mandiri.png'),
+  qris: require('../assets/images/logos/qris.jpg'),
+  gopay: require('../assets/images/logos/gopay.png'),
+  ovo: require('../assets/images/logos/ovo.png'),
+  dana: require('../assets/images/logos/dana.png'),
+  shopeepay: require('../assets/images/logos/shopeepay.png'),
+};
 
 const PAYMENT_METHODS = [
   {
@@ -231,6 +243,9 @@ export default function PaymentScreen() {
                   <View style={styles.methodRadio}>
                     {selectedMethod === method.id && <View style={styles.methodRadioInner} />}
                   </View>
+                  {LOGO_MAP[method.id] ? (
+                    <Image source={LOGO_MAP[method.id]} style={styles.methodLogo} resizeMode="contain" />
+                  ) : null}
                   <Text style={styles.methodName}>{method.name}</Text>
                   {method.id === 'trubus_coin' && (
                     <Text style={styles.coinBalance}>Saldo: Rp {user.trubusCoins.toLocaleString('id-ID')}</Text>
@@ -287,6 +302,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginRight: SPACING.md,
   },
   methodRadioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.primary },
+  methodLogo: { width: 32, height: 32, marginRight: 10, borderRadius: 4 },
   methodName: { flex: 1, fontSize: 14, color: COLORS.text, fontWeight: '500' },
   coinBalance: { fontSize: 11, color: COLORS.coinColor, fontWeight: '600', marginRight: 8 },
   bottomBar: {
