@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
+import { useAlert } from '../context/AlertContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const COURIERS = [
@@ -25,6 +26,7 @@ const STORES = [
 export default function CheckoutScreen() {
   const router = useRouter();
   const { cart, addresses, getCartTotal, addOrder, clearCart } = useApp();
+  const { showAlert } = useAlert();
   const [selectedAddressId, setSelectedAddressId] = useState(addresses.find(a => a.isDefault)?.id || addresses[0]?.id || '');
   const [selectedCourier, setSelectedCourier] = useState('');
   const [selectedStore, setSelectedStore] = useState(STORES[0].id);
@@ -44,11 +46,11 @@ export default function CheckoutScreen() {
 
   const handleOrder = () => {
     if (!selectedAddress) {
-      Alert.alert('Peringatan', 'Pilih alamat pengiriman');
+      showAlert('Peringatan', 'Pilih alamat pengiriman');
       return;
     }
     if (!selectedCourier) {
-      Alert.alert('Peringatan', 'Pilih jasa kurir');
+      showAlert('Peringatan', 'Pilih jasa kurir');
       return;
     }
 

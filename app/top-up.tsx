@@ -99,13 +99,13 @@ export default function TopUpScreen() {
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color={COLORS.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Trubus Pay</Text>
+                <Text style={styles.headerTitle}>Trubus Coin</Text>
                 <View style={{ width: 24 }} />
             </View>
 
             <View style={styles.balanceCard}>
-                <Text style={styles.balanceLabel}>Saldo Anda</Text>
-                <Text style={styles.balanceValue}>Rp {user.trubusCoins.toLocaleString('id-ID')}</Text>
+                <Text style={styles.balanceLabel}>Coin Anda</Text>
+                <Text style={styles.balanceValue}>{user.trubusCoins.toLocaleString('id-ID')}</Text>
             </View>
 
             {/* Tabs */}

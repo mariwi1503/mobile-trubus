@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
+import { useAlert } from '../context/AlertContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const PAYMENT_METHODS = [
@@ -47,6 +48,7 @@ export default function PaymentScreen() {
   const router = useRouter();
   const { orderId } = useLocalSearchParams();
   const { orders, updateOrderPayment, user, setUser } = useApp();
+  const { showAlert } = useAlert();
   const [selectedMethod, setSelectedMethod] = useState('');
   const [showDetail, setShowDetail] = useState(false);
   const insets = useSafeAreaInsets();
@@ -71,16 +73,16 @@ export default function PaymentScreen() {
 
   const handlePay = () => {
     if (!selectedMethod) {
-      Alert.alert('Peringatan', 'Pilih metode pembayaran');
+      showAlert('Peringatan', 'Pilih metode pembayaran');
       return;
     }
 
     if (selectedMethod === 'trubus_coin') {
       if (user.trubusCoins < order.totalAmount) {
-        Alert.alert('Saldo Tidak Cukup', 'Saldo Trubus Coin Anda tidak mencukupi. Silakan top up atau pilih metode lain.');
+        showAlert('Saldo Tidak Cukup', 'Saldo Trubus Coin Anda tidak mencukupi. Silakan top up atau pilih metode lain.');
         return;
       }
-      Alert.alert(
+      showAlert(
         'Konfirmasi',
         `Potong Rp ${order.totalAmount.toLocaleString('id-ID')} dari Trubus Coin Anda?`,
         [
@@ -90,7 +92,7 @@ export default function PaymentScreen() {
             onPress: () => {
               setUser({ ...user, trubusCoins: user.trubusCoins - order.totalAmount });
               updateOrderPayment(orderId as string, 'Trubus Coin');
-              Alert.alert('Pembayaran Berhasil', 'Pembayaran dengan Trubus Coin berhasil!', [
+              showAlert('Pembayaran Berhasil', 'Pembayaran dengan Trubus Coin berhasil!', [
                 { text: 'OK', onPress: () => router.replace('/(tabs)') },
               ]);
             },
@@ -105,7 +107,7 @@ export default function PaymentScreen() {
 
   const handleConfirmPayment = () => {
     updateOrderPayment(orderId as string, selectedPayment?.name || selectedMethod);
-    Alert.alert('Pembayaran Dikonfirmasi', 'Pembayaran Anda sedang diverifikasi. Kami akan mengirim notifikasi setelah pembayaran dikonfirmasi.', [
+    showAlert('Pembayaran Dikonfirmasi', 'Pembayaran Anda sedang diverifikasi. Kami akan mengirim notifikasi setelah pembayaran dikonfirmasi.', [
       { text: 'OK', onPress: () => router.replace('/(tabs)') },
     ]);
   };

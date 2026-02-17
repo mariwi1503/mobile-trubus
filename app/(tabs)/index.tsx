@@ -211,7 +211,6 @@ export default function HomeScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
         {/* Banner Carousel */}
-        {/* Banner Carousel */}
         <View>
           <FlatList
             ref={flatListRef}
@@ -264,7 +263,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Trubus Coins */}
-        <View style={styles.sectionPadded}>
+        {/* <View style={styles.sectionPadded}>
           <TouchableOpacity style={styles.coinCard} onPress={() => router.push('/top-up')}>
             <View style={styles.coinLeft}>
               <View style={styles.coinIconWrap}>
@@ -280,7 +279,7 @@ export default function HomeScreen() {
               <Text style={styles.topUpText}>Top Up</Text>
             </TouchableOpacity>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         {/* Online Experts */}
         <View style={styles.section}>
@@ -394,7 +393,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     backgroundColor: COLORS.white, paddingTop: 48, paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.xs, ...SHADOWS.small,
+    paddingBottom: SPACING.xs, marginBottom: SPACING.md, ...SHADOWS.small,
   },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },
@@ -494,7 +493,7 @@ const styles = StyleSheet.create({
   dotActive: { backgroundColor: COLORS.primary, width: 20 },
   dotInactive: { backgroundColor: COLORS.textLight, opacity: 0.3 },
   promoIconWrap: { position: 'absolute', right: -20, bottom: -20, transform: [{ rotate: '-15deg' }] },
-  section: { marginTop: SPACING.xl },
+  section: { marginTop: SPACING.md },
   sectionPadded: { marginTop: SPACING.lg, paddingHorizontal: SPACING.lg },
   sectionHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
