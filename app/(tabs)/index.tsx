@@ -133,10 +133,14 @@ const BannerCard = ({ banner, onPress }: { banner: any, onPress: () => void }) =
 };
 
 const QUICK_MENU = [
-  { id: '1', name: 'Bibit', icon: 'leaf', color: '#4CAF50', route: '/(tabs)/catalog' },
-  { id: '2', name: 'Pupuk', icon: 'flask', color: '#8BC34A', route: '/(tabs)/catalog' },
-  { id: '3', name: 'Pestisida', icon: 'shield-checkmark', color: '#FF9800', route: '/(tabs)/catalog' },
-  { id: '4', name: 'Alat Tani', icon: 'construct', color: '#F44336', route: '/(tabs)/catalog' },
+  { id: '1', name: 'Bibit', icon: 'leaf', color: '#4CAF50', bg: '#E8F5E9', route: '/(tabs)/catalog' },
+  { id: '2', name: 'Pupuk', icon: 'flask', color: '#8BC34A', bg: '#F1F8E9', route: '/(tabs)/catalog' },
+  { id: '3', name: 'Pestisida', icon: 'shield-checkmark', color: '#FF9800', bg: '#FFF3E0', route: '/(tabs)/catalog' },
+  { id: '4', name: 'Alat Tani', icon: 'construct', color: '#F44336', bg: '#FFEBEE', route: '/(tabs)/catalog' },
+  { id: '5', name: 'Konsultasi', icon: 'people', color: '#2196F3', bg: '#E3F2FD', route: '/(tabs)/experts' },
+  { id: '6', name: 'Artikel', icon: 'newspaper', color: '#9C27B0', bg: '#F3E5F5', route: '/(tabs)/articles' },
+  { id: '7', name: 'Paket Tani', icon: 'cube', color: '#009688', bg: '#E0F2F1', route: '/(tabs)/catalog' },
+  { id: '8', name: 'Promo', icon: 'pricetag', color: '#E91E63', bg: '#FCE4EC', route: '/(tabs)/catalog' },
 ];
 
 export default function HomeScreen() {
