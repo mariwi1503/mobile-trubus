@@ -12,6 +12,7 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<'consumer' | 'expert'>('consumer');
@@ -20,7 +21,7 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
   const [error, setError] = useState('');
   const { showAlert } = useAlert();
 
-  const reset = () => { setEmail(''); setPassword(''); setName(''); setPhone(''); setRole('consumer'); setSpecialization(''); setError(''); };
+  const reset = () => { setEmail(''); setPassword(''); setConfirmPassword(''); setName(''); setPhone(''); setRole('consumer'); setSpecialization(''); setError(''); };
 
   const handleLogin = () => {
     setError('');
@@ -32,7 +33,8 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
 
   const handleRegister = () => {
     setError('');
-    if (!name || !password || !phone) { setError('Nama, Telepon, dan Password wajib diisi'); return; }
+    if (!name || !password || !confirmPassword || !phone) { setError('Nama, Telepon, dan Password wajib diisi'); return; }
+    if (password !== confirmPassword) { setError('Konfirmasi password tidak cocok'); return; }
     if (role === 'expert' && !specialization) { setError('Spesialisasi wajib diisi untuk ahli'); return; }
     const data: RegisteredUser = {
       name, email, password, phone, role, avatar: '',
@@ -70,25 +72,7 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
                 <Text style={styles.inputLabel}>Nama Lengkap</Text>
                 <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Masukkan nama lengkap" placeholderTextColor={COLORS.textLight} />
 
-                {/* Role Selection */}
-                <Text style={styles.inputLabel}>Daftar Sebagai</Text>
-                <View style={styles.roleRow}>
-                  <TouchableOpacity style={[styles.roleBtn, role === 'consumer' && styles.roleBtnActive]} onPress={() => setRole('consumer')}>
-                    <Ionicons name="person" size={20} color={role === 'consumer' ? COLORS.white : COLORS.primary} />
-                    <Text style={[styles.roleBtnText, role === 'consumer' && styles.roleBtnTextActive]}>Konsumen</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.roleBtn, role === 'expert' && styles.roleBtnActive]} onPress={() => setRole('expert')}>
-                    <Ionicons name="school" size={20} color={role === 'expert' ? COLORS.white : COLORS.primary} />
-                    <Text style={[styles.roleBtnText, role === 'expert' && styles.roleBtnTextActive]}>Ahli Pertanian</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {role === 'expert' && (
-                  <>
-                    <Text style={styles.inputLabel}>Spesialisasi</Text>
-                    <TextInput style={styles.input} value={specialization} onChangeText={setSpecialization} placeholder="Contoh: Ahli Hama & Penyakit" placeholderTextColor={COLORS.textLight} />
-                  </>
-                )}
+                {/* Role Selection REMOVED */}
 
                 <Text style={styles.inputLabel}>No. Telepon</Text>
                 <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="08xxxxxxxxxx" placeholderTextColor={COLORS.textLight} keyboardType="phone-pad" />
@@ -115,15 +99,24 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
               </TouchableOpacity>
             </View>
 
+            {mode === 'register' && (
+              <>
+                <Text style={styles.inputLabel}>Konfirmasi Password</Text>
+                <View style={styles.passwordRow}>
+                  <TextInput style={styles.passwordInput} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Ulangi password Anda" placeholderTextColor={COLORS.textLight} secureTextEntry={!showPassword} />
+                </View>
+              </>
+            )}
+
             {mode === 'login' && (
               <View style={styles.demoContainer}>
                 <Text style={styles.hintText}>Demo (Klik untuk isi):</Text>
                 <TouchableOpacity onPress={() => { setPhone('081234567890'); setPassword('123456'); }}>
                   <Text style={styles.demoLink}>Konsumen: 081234567890 / 123456</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => { setPhone('081298765432'); setPassword('123456'); }}>
+                {/* <TouchableOpacity onPress={() => { setPhone('081298765432'); setPassword('123456'); }}>
                   <Text style={styles.demoLink}>Ahli: 081298765432 / 123456</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
               </View>
             )}
 
@@ -330,8 +323,7 @@ function ExpertDashboard() {
           { icon: 'receipt-outline', label: 'Riwayat Konsultasi', route: '/consultations', color: '#2196F3' },
           { icon: 'notifications-outline', label: 'Notifikasi', route: '/notifications', color: '#9C27B0' },
           { icon: 'settings-outline', label: 'Pengaturan Profil', route: '', color: '#607D8B' },
-          { icon: 'help-circle-outline', label: 'Pusat Bantuan', route: '', color: '#00BCD4' },
-          { icon: 'help-circle-outline', label: 'Pusat Bantuan', route: '', color: '#00BCD4' },
+          { icon: 'help-circle-outline', label: 'Pusat Bantuan', route: '/customer-service', color: '#00BCD4' },
         ].map((item, i) => (
           <TouchableOpacity key={i} style={styles.menuItem} onPress={() => item.route ? router.push(item.route as any) : showAlert('Info', 'Fitur segera hadir!')}>
             <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
@@ -378,7 +370,7 @@ function ConsumerProfile() {
     },
     {
       section: 'Lainnya', items: [
-        { id: 'help', icon: 'help-circle-outline', label: 'Pusat Bantuan', route: '', color: '#00BCD4' },
+        { id: 'help', icon: 'help-circle-outline', label: 'Pusat Bantuan', route: '/customer-service', color: '#00BCD4' },
         { id: 'about', icon: 'information-circle-outline', label: 'Tentang Aplikasi', route: '', color: '#4CAF50' },
         { id: 'rate', icon: 'star-outline', label: 'Beri Rating', route: '', color: '#FFC107' },
       ]

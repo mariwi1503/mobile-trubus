@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList, TextInput, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList, TextInput, Dimensions, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,8 +12,9 @@ import { ARTICLES } from '../../data/articles';
 import ProductCard from '../../components/ProductCard';
 import ExpertCard from '../../components/ExpertCard';
 import ArticleCard from '../../components/ArticleCard';
+import CSChatWidget from '../../components/CSChatWidget';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const BANNERS = [
   {
@@ -148,6 +149,25 @@ export default function HomeScreen() {
   const { user, getCartCount, getUnreadCount } = useApp();
   const [activeBanner, setActiveBanner] = useState(0);
   const flatListRef = React.useRef<FlatList>(null);
+  const [chatVisible, setChatVisible] = useState(false);
+  const chatAnim = React.useRef(new Animated.Value(0)).current;
+
+  const openCSChat = () => {
+    setChatVisible(true);
+    Animated.spring(chatAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      bounciness: 6,
+    }).start();
+  };
+
+  const closeCSChat = () => {
+    Animated.timing(chatAnim, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => setChatVisible(false));
+  };
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -389,6 +409,52 @@ export default function HomeScreen() {
 
         <View style={{ height: 20 }} />
       </ScrollView>
+
+      {/* Customer Service Widget Overlay */}
+      {chatVisible && (
+        <Animated.View style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            opacity: chatAnim,
+            zIndex: 99,
+          }
+        ]}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeCSChat} />
+        </Animated.View>
+      )}
+
+      {chatVisible && (
+        <Animated.View style={[
+          styles.chatWidgetContainer,
+          {
+            opacity: chatAnim,
+            transform: [
+              { scale: chatAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) },
+              { translateY: chatAnim.interpolate({ inputRange: [0, 1], outputRange: [200, 0] }) }
+            ],
+            transformOrigin: 'bottom right',
+          }
+        ]}>
+          <CSChatWidget onClose={closeCSChat} isOverlay />
+        </Animated.View>
+      )}
+
+      {/* Customer Service Floating Action Button */}
+      {!chatVisible && (
+        <Animated.View style={[styles.fabCSContainer, {
+          opacity: chatAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+          transform: [{ scale: chatAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]
+        }]}>
+          <TouchableOpacity
+            style={styles.fabCS}
+            onPress={openCSChat}
+            activeOpacity={0.9}
+          >
+            <Ionicons name="logo-whatsapp" size={28} color={COLORS.white} />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -575,6 +641,32 @@ const styles = StyleSheet.create({
   ctaButtonText: {
     fontSize: 12, fontWeight: '900', color: '#16a34a',
     textTransform: 'uppercase', letterSpacing: 2.4,
+  },
+  fabCSContainer: {
+    position: 'absolute',
+    bottom: SPACING.xl,
+    right: SPACING.lg,
+    zIndex: 98,
+  },
+  fabCS: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.large,
+    elevation: 6,
+    shadowColor: COLORS.primary,
+  },
+  chatWidgetContainer: {
+    position: 'absolute',
+    bottom: SPACING.xl,
+    left: width * 0.05,
+    right: width * 0.05,
+    width: width * 0.9,
+    height: height * 0.7,
+    zIndex: 100,
   },
 });
 // });
