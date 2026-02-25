@@ -124,7 +124,7 @@ const defaultAddresses: Address[] = [
 
 const defaultNotifications: Notification[] = [
   {
-    id: 'n1', title: 'Selamat Datang!', message: 'Selamat datang di Halo Toko Trubus. Nikmati konsultasi pertama GRATIS!',
+    id: 'n1', title: 'Selamat Datang!', message: 'Selamat datang di Halo Trubus. Nikmati konsultasi pertama GRATIS!',
     type: 'promo', read: false, createdAt: '2026-02-11T08:00:00Z'
   },
   {

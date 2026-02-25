@@ -28,7 +28,7 @@ export default function ArticleDetailScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `${article.title}\n\nBaca selengkapnya di Halo Toko Trubus`,
+        message: `${article.title}\n\nBaca selengkapnya di Halo Trubus`,
       });
     } catch { }
   };

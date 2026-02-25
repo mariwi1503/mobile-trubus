@@ -61,7 +61,7 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
           {/* Logo */}
           <View style={styles.logoRow}>
             <Image source={require('../../assets/images/logo.png')} style={styles.logoSmall} resizeMode="contain" />
-            <Text style={styles.logoText}>Halo Toko Trubus</Text>
+            <Text style={styles.logoText}>Halo Trubus</Text>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
@@ -453,7 +453,7 @@ function ConsumerProfile() {
       <TouchableOpacity style={styles.logoutBtn} onPress={() => showAlert('Keluar', 'Yakin ingin keluar?', [{ text: 'Batal', style: 'cancel' }, { text: 'Keluar', style: 'destructive', onPress: logout }])}>
         <Ionicons name="log-out-outline" size={20} color={COLORS.accent} /><Text style={styles.logoutText}>Keluar</Text>
       </TouchableOpacity>
-      <Text style={styles.version}>Halo Toko Trubus v1.0.0</Text>
+      <Text style={styles.version}>Halo Trubus v1.0.0</Text>
       <View style={{ height: 30 }} />
     </ScrollView>
   );
@@ -465,7 +465,7 @@ function GuestProfile({ onLogin }: { onLogin: () => void }) {
     <View style={styles.guestContainer}>
       <View style={styles.guestHeader}>
         <Image source={require('../../assets/images/logo.png')} style={styles.guestLogo} resizeMode="contain" />
-        <Text style={styles.guestTitle}>Halo Toko Trubus</Text>
+        <Text style={styles.guestTitle}>Halo Trubus</Text>
         <Text style={styles.guestSubtitle}>Solusi Tepat, Tanaman Sehat</Text>
       </View>
       <View style={styles.guestContent}>
