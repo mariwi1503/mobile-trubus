@@ -58,7 +58,7 @@ export default function CSChatWidget({ onClose, isOverlay = false }: { onClose: 
         <View style={[styles.container, isOverlay && styles.overlayContainer]}>
             <KeyboardAvoidingView
                 style={styles.container}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
                 <View style={[styles.header, !isOverlay && { paddingTop: Math.max(insets.top, 48) }]}>
                     <TouchableOpacity style={styles.backBtn} onPress={onClose}>
@@ -79,6 +79,7 @@ export default function CSChatWidget({ onClose, isOverlay = false }: { onClose: 
                     data={messages}
                     keyExtractor={item => item.id}
                     contentContainerStyle={styles.chatContainer}
+                    keyboardShouldPersistTaps="handled"
                     onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
                     onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
                     renderItem={({ item }) => {
@@ -134,7 +135,7 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.background,
     },
     overlayContainer: {
-        borderRadius: RADIUS.lg,
+        borderRadius: RADIUS.md,
         overflow: 'hidden',
         ...SHADOWS.medium,
     },

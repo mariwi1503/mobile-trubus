@@ -51,7 +51,7 @@ export default function OnboardingScreen() {
 
   const handleFinish = () => {
     setIsOnboarded(true);
-    router.replace('/(tabs)');
+    router.replace('/terms');
   };
 
   const handleScroll = (event: any) => {
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   dotActive: { backgroundColor: COLORS.primary, width: 24 },
   nextBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.md,
     paddingVertical: 16,
   },
   nextBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '700', marginRight: 8 },

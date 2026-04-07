@@ -52,7 +52,7 @@ export default function ScheduleScreen() {
       consultationDate: selectedDate,
       consultationTime: selectedTime,
       totalAmount: expert.fee,
-      status: 'pending_payment' as const,
+      status: 'draft' as const,
       clientName: user.name,
       clientPhone: user.phone,
       clientAvatar: user.avatar,
@@ -60,7 +60,7 @@ export default function ScheduleScreen() {
     };
 
     addOrder(order);
-    router.push({ pathname: '/order-success', params: { orderId, type: 'consultation' } });
+    router.push({ pathname: '/payment', params: { orderId, total: String(expert.fee) } });
   };
 
   return (
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '700', color: COLORS.white },
   expertSummary: {
     backgroundColor: COLORS.white, marginHorizontal: SPACING.lg, marginTop: SPACING.lg,
-    borderRadius: RADIUS.lg, padding: SPACING.lg, flexDirection: 'row', alignItems: 'center',
+    borderRadius: RADIUS.md, padding: SPACING.lg, flexDirection: 'row', alignItems: 'center',
     ...SHADOWS.small,
   },
   expertInfo: { flex: 1, marginLeft: SPACING.sm },
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   timeTextActive: { color: COLORS.white },
   summaryCard: {
     backgroundColor: COLORS.white, marginHorizontal: SPACING.lg, marginTop: SPACING.xl,
-    borderRadius: RADIUS.lg, padding: SPACING.lg, ...SHADOWS.small,
+    borderRadius: RADIUS.md, padding: SPACING.lg, ...SHADOWS.small,
   },
   summaryTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: SPACING.md },
   summaryRow: {

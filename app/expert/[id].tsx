@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
   shareBtn: { padding: 4 },
   profileCard: {
     backgroundColor: COLORS.white, marginHorizontal: SPACING.lg, marginTop: SPACING.lg,
-    borderRadius: RADIUS.lg, padding: SPACING.lg, ...SHADOWS.medium,
+    borderRadius: RADIUS.md, padding: SPACING.lg, ...SHADOWS.medium,
   },
   profileTop: { flexDirection: 'row', marginBottom: SPACING.lg },
   avatarWrap: { position: 'relative' },
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   statDivider: { width: 1, backgroundColor: COLORS.divider },
   feeCard: {
     backgroundColor: '#E8F5E9', marginHorizontal: SPACING.lg, marginTop: SPACING.md,
-    borderRadius: RADIUS.lg, padding: SPACING.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderRadius: RADIUS.md, padding: SPACING.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
   feeLeft: {},
   feeLabel: { fontSize: 12, color: COLORS.textSecondary },
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
   feePerSession: { fontSize: 12, color: COLORS.textSecondary },
   sectionCard: {
     backgroundColor: COLORS.white, marginHorizontal: SPACING.lg, marginTop: SPACING.md,
-    borderRadius: RADIUS.lg, padding: SPACING.lg, ...SHADOWS.small,
+    borderRadius: RADIUS.md, padding: SPACING.lg, ...SHADOWS.small,
   },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: SPACING.sm },
   bio: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 20 },

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
+import { COLORS, RADIUS, SHADOWS, SPACING, CARD_WIDTH } from '../constants/theme';
 import { Expert } from '../data/experts';
 
 interface ExpertCardProps {
@@ -66,7 +66,6 @@ export default function ExpertCard({ expert, horizontal }: ExpertCardProps) {
         <Ionicons name="star" size={10} color={COLORS.warning} />
         <Text style={styles.ratingText}>{expert.rating}</Text>
       </View>
-      <Text style={styles.fee}>Rp {(expert.fee / 1000).toFixed(0)}rb</Text>
     </TouchableOpacity>
   );
 }
@@ -75,7 +74,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.white, borderRadius: RADIUS.md,
     ...SHADOWS.small, padding: SPACING.md,
-    alignItems: 'center', width: 120, marginRight: SPACING.md, marginBottom: SPACING.md,
+    alignItems: 'center', width: CARD_WIDTH, marginRight: SPACING.md, marginBottom: SPACING.md,
   },
   imageContainer: { position: 'relative', marginBottom: 8 },
   image: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#f0f0f0' },

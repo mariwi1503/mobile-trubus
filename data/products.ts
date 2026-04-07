@@ -1,10 +1,12 @@
+import { ImageSourcePropType } from 'react-native';
+
 export interface Product {
   id: string;
   name: string;
   category: string;
   price: number;
   originalPrice?: number;
-  image: string;
+  image: string | ImageSourcePropType;
   rating: number;
   sold: number;
   stock: number;
@@ -14,16 +16,98 @@ export interface Product {
 }
 
 export const PRODUCT_CATEGORIES = [
-  { id: 'all', name: 'Semua', icon: 'apps' },
-  { id: 'bibit', name: 'Bibit', icon: 'leaf' },
-  { id: 'tanaman', name: 'Tanaman', icon: 'flower' },
-  { id: 'pupuk', name: 'Pupuk', icon: 'flask' },
-  { id: 'pestisida', name: 'Pestisida', icon: 'shield-checkmark' },
-  { id: 'alat', name: 'Alat Tani', icon: 'construct' },
-  { id: 'media', name: 'Media Tanam', icon: 'layers' },
+  { id: 'all', name: 'Semua', icon: 'apps', color: '#607D8B', bg: '#ECEFF1' },
+  { id: 'bibit', name: 'Bibit', icon: 'leaf', color: '#4CAF50', bg: '#E8F5E9' },
+  { id: 'benih', name: 'Benih', icon: 'flower-outline', color: '#8BC34A', bg: '#F1F8E9' },
+  { id: 'pupuk', name: 'Pupuk', icon: 'flask', color: '#CDDC39', bg: '#F9FBE7' },
+  { id: 'media', name: 'Media Tanam', icon: 'layers', color: '#795548', bg: '#EFEBE9' },
+  { id: 'pestisida', name: 'Pestisida', icon: 'shield-checkmark', color: '#FF9800', bg: '#FFF3E0' },
+  { id: 'alat', name: 'Alat Tani', icon: 'construct', color: '#F44336', bg: '#FFEBEE' },
+  { id: 'flash_sale', name: 'Flash Sale', icon: 'flash', color: '#FF5252', bg: '#FFEBEE' },
+  { id: 'promo', name: 'Promo', icon: 'pricetag', color: '#E91E63', bg: '#FCE4EC' },
 ];
 
 export const PRODUCTS: Product[] = [
+  {
+    id: 'rp1', name: 'NaFos Pupuk Organik Padat', category: 'pupuk',
+    price: 68000, originalPrice: 79000,
+    image: require('../assets/images/products/nafos.jpeg'),
+    rating: 4.9, sold: 9950, stock: 120,
+    description: 'Pupuk organik padat NaFos kaya unsur fosfat dan kalium. Cocok untuk berbagai jenis tanaman dan membantu pertumbuhan akar, pembungaan, serta pembuahan lebih optimal.',
+    weight: 500, store: 'Trubus Store Jakarta',
+  },
+  {
+    id: 'rp2', name: 'Kompos Sapi Trubus', category: 'pupuk',
+    price: 32000, originalPrice: 38000,
+    image: require('../assets/images/products/kompos-sapi-trubus.jpeg'),
+    rating: 4.9, sold: 9900, stock: 300,
+    description: 'Kompos sapi Trubus berbahan organik matang untuk memperbaiki struktur tanah, meningkatkan kesuburan, dan mendukung pertumbuhan tanaman buah maupun sayur.',
+    weight: 5000, store: 'Trubus Store Bandung',
+  },
+  {
+    id: 'rp3', name: 'Kompos Kambing Trubus', category: 'pupuk',
+    price: 34000, originalPrice: 39000,
+    image: require('../assets/images/products/kompos-kambing-trubus.jpeg'),
+    rating: 4.8, sold: 9850, stock: 280,
+    description: 'Kompos kambing Trubus kaya unsur hara organik untuk membantu pertumbuhan vegetatif dan generatif tanaman. Cocok untuk kebun buah, sayur, dan tanaman hias.',
+    weight: 5000, store: 'Trubus Store Surabaya',
+  },
+  {
+    id: 'rp4', name: 'Trubus Pupuk Cair 1 Liter', category: 'pupuk',
+    price: 58000, originalPrice: 65000,
+    image: require('../assets/images/products/pupuk-cair-trubus.jpeg'),
+    rating: 4.8, sold: 9800, stock: 200,
+    description: 'Pupuk cair Trubus untuk semua jenis tanaman. Praktis diaplikasikan, membantu pertumbuhan daun, batang, dan buah, serta cocok untuk penggunaan rutin.',
+    weight: 1000, store: 'Trubus Store Jakarta',
+  },
+  {
+    id: 'rp5', name: 'BIO TR+ Pupuk Hayati Butiran', category: 'pupuk',
+    price: 72000, originalPrice: 82000,
+    image: require('../assets/images/products/bio-tr.jpeg'),
+    rating: 4.8, sold: 9750, stock: 180,
+    description: 'Pupuk hayati butiran BIO TR+ ramah lingkungan untuk meningkatkan kesuburan tanah dan hasil panen. Cocok untuk budidaya hortikultura dan tanaman tahunan.',
+    weight: 500, store: 'Trubus Store Yogyakarta',
+  },
+  {
+    id: 'rp6', name: 'FullGro High Organic Amino-16', category: 'pupuk',
+    price: 86000, originalPrice: 95000,
+    image: require('../assets/images/products/fullgro.jpeg'),
+    rating: 4.9, sold: 9700, stock: 140,
+    description: 'Pupuk organik lengkap FullGro dengan kandungan asam amino untuk membantu pertumbuhan tanaman lebih sehat, hijau, dan produktif.',
+    weight: 600, store: 'Trubus Store Bandung',
+  },
+  {
+    id: 'rp7', name: 'Kompos Premium Trubus', category: 'pupuk',
+    price: 36000, originalPrice: 42000,
+    image: require('../assets/images/products/kompos-premium-trubus.jpeg'),
+    rating: 4.8, sold: 9650, stock: 260,
+    description: 'Kompos premium Trubus dengan bahan organik pilihan untuk meningkatkan porositas tanah, menambah unsur hara, dan membantu tanaman tumbuh lebih optimal.',
+    weight: 5000, store: 'Trubus Store Surabaya',
+  },
+  {
+    id: 'rp8', name: 'Trubus Super Prima Pembesar Buah', category: 'pupuk',
+    price: 49000, originalPrice: 57000,
+    image: require('../assets/images/products/trubus-super-prima.jpeg'),
+    rating: 4.8, sold: 9600, stock: 220,
+    description: 'Formula pembesar buah Trubus Super Prima untuk membantu kualitas buah lebih seragam, padat, dan menarik. Cocok dipakai pada fase generatif.',
+    weight: 100, store: 'Trubus Store Jakarta',
+  },
+  {
+    id: 'rp9', name: 'Monodon Pupuk Hayati Majemuk Cair', category: 'pupuk',
+    price: 79000, originalPrice: 89000,
+    image: require('../assets/images/products/monodon.jpeg'),
+    rating: 4.7, sold: 9550, stock: 160,
+    description: 'Pupuk hayati majemuk cair Monodon ramah lingkungan untuk pertanian dan perkebunan. Membantu memperbaiki kondisi tanah dan mendorong produktivitas tanaman.',
+    weight: 1000, store: 'Trubus Store Yogyakarta',
+  },
+  {
+    id: 'rp10', name: 'Media Tanam Trubus', category: 'media',
+    price: 29000, originalPrice: 34000,
+    image: require('../assets/images/products/media-tanam-trubus.jpeg'),
+    rating: 4.7, sold: 9500, stock: 340,
+    description: 'Media tanam siap pakai Trubus untuk membantu akar berkembang baik, menjaga kelembapan, dan mendukung tanaman pot maupun semai tumbuh sehat.',
+    weight: 5000, store: 'Trubus Store Bandung',
+  },
   {
     id: 'p1', name: 'Bibit Tomat Cherry Premium', category: 'bibit',
     price: 25000, originalPrice: 35000,

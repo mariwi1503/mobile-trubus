@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList, TextInput, Dimensions, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList, Dimensions, Animated, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
-import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
+import { COLORS, RADIUS, SHADOWS, SPACING, CARD_WIDTH } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { EXPERTS } from '../../data/experts';
 import { PRODUCTS } from '../../data/products';
@@ -15,142 +14,96 @@ import ArticleCard from '../../components/ArticleCard';
 import CSChatWidget from '../../components/CSChatWidget';
 
 const { width, height } = Dimensions.get('window');
+const BANNER_WIDTH = width * 0.85;
 
 const BANNERS = [
-  {
-    id: '1',
-    type: 'featured',
-    title: 'Solusi Tani\nLebih Presisi',
-    subtitle: 'Konsultasi langsung di lahan Anda melalui bantuan ahli.',
-    tag: 'Smart Farming',
-    image: 'https://images.unsplash.com/photo-1707944745899-104a4b12d945?q=80&w=1047&auto=format&fit=crop',
-    detailImage: 'https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?w=200',
-    color: ['#022c22', '#064e3b', 'transparent'], // emerald-950 to emerald-900/80 to transparent
-    btnText: 'Konsultasi Sekarang',
-    route: '/(tabs)/experts'
-  },
-  {
-    id: '2',
-    type: 'promo',
-    title: 'Diskon 30%',
-    subtitle: 'Untuk semua pupuk organik',
-    image: 'https://plus.unsplash.com/premium_photo-1686529896385-8a8d581d0225?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OXx8dG9rbyUyMHNheXVyfGVufDB8fDB8fHww',
-    color: ['#F57C00', 'rgba(245, 124, 0, 0.8)', 'transparent'],
-    icon: 'pricetag',
-    route: '/(tabs)/catalog'
-  },
-  {
-    id: '3',
-    type: 'promo',
-    title: 'Flash Sale',
-    subtitle: 'Bibit tanaman premium mulai 15rb',
-    image: 'https://plus.unsplash.com/premium_photo-1664299231810-29d1caf6f753?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OXx8dG9rbyUyMHBlcnRhbmlhbnxlbnwwfHwwfHx8MA%3D%3D',
-    color: ['#C2185B', 'rgba(194, 24, 91, 0.8)', 'transparent'],
-    icon: 'flash',
-    route: '/(tabs)/catalog'
-  },
+  { id: '1', route: '/(tabs)/catalog', image: require('../../assets/banner/banner1.png') },
+  { id: '2', route: '/(tabs)/catalog', image: require('../../assets/banner/banner2.png') },
+  { id: '3', route: '/(tabs)/catalog', image: require('../../assets/banner/banner3.png') },
+  { id: '4', route: '/(tabs)/catalog', image: require('../../assets/banner/banner4.png') },
 ];
 
-const BannerCard = ({ banner, onPress }: { banner: any, onPress: () => void }) => {
-  if (banner.type === 'featured') {
-    return (
-      <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={styles.featuredBannerContainer}>
-        <View style={styles.featuredBanner}>
-          <Image
-            source={{ uri: banner.image }}
-            style={styles.featuredBannerBg}
-          />
-          <LinearGradient
-            colors={['#022c22', 'rgba(6, 78, 59, 0.8)', 'transparent']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={StyleSheet.absoluteFill}
-          />
+const LOOP_COUNT = 1000;
+const INFINITE_BANNERS = Array(LOOP_COUNT).fill(BANNERS).flat().map((item, index) => ({
+  ...item,
+  uniqueId: `${item.id}-${index}`
+}));
+const INITIAL_INDEX = BANNERS.length * Math.floor(LOOP_COUNT / 2);
 
-          {/* Decoration */}
-          <View style={styles.decorationCircle} />
 
-          <View style={styles.featuredBannerContent}>
-            <View style={{ flex: 1, paddingVertical: 4 }}>
-              <View style={styles.tagContainer}>
-                <BlurView intensity={20} style={styles.tagBlur}>
-                  <Ionicons name="leaf" size={10} color="#86efac" style={{ marginRight: 6 }} />
-                  <Text style={styles.tagText}>{banner.tag}</Text>
-                </BlurView>
-              </View>
-
-              <Text style={styles.featuredTitle}>{banner.title}</Text>
-              <Text style={styles.featuredSubtitle}>{banner.subtitle}</Text>
-
-              <View style={styles.featuredBtn}>
-                <Text style={styles.featuredBtnText}>{banner.btnText}</Text>
-                <Ionicons name="arrow-forward" size={12} color={COLORS.white} />
-              </View>
-            </View>
-
-            {/* Visual Detail Circle */}
-            <View style={styles.detailImageContainer}>
-              <View style={styles.detailImageWrap}>
-                <Image source={{ uri: banner.detailImage }} style={styles.detailImage} />
-              </View>
-              <View style={styles.detailIconBadge}>
-                <Ionicons name="leaf" size={14} color="#16a34a" />
-              </View>
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  }
-
+const BannerCard = ({ banner }: { banner: any }) => {
   return (
-    <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={styles.promoBannerContainer}>
-      <View style={styles.featuredBanner}>
-        {banner.image && (
-          <Image
-            source={{ uri: banner.image }}
-            style={StyleSheet.absoluteFill}
-          />
-        )}
-        {/* Gradient only at the bottom for text readability */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.9)']}
-          style={[StyleSheet.absoluteFill, { top: '50%' }]}
-        />
-
-        {/* Gradient only at the bottom for text readability */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.9)']}
-          style={[StyleSheet.absoluteFill, { top: '50%' }]}
-        />
-
-        <View style={styles.promoContent}>
-          <Text style={styles.promoTitle}>{banner.title}</Text>
-          <Text style={styles.promoSubtitle}>{banner.subtitle}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
+    <View style={styles.featuredBannerContainer}>
+      <Image
+        source={banner.image}
+        style={{ width: '100%', height: '100%', resizeMode: 'contain' }}
+      />
+    </View>
   );
 };
 
 const QUICK_MENU = [
   { id: '1', name: 'Bibit', icon: 'leaf', color: '#4CAF50', bg: '#E8F5E9', route: '/(tabs)/catalog' },
-  { id: '2', name: 'Pupuk', icon: 'flask', color: '#8BC34A', bg: '#F1F8E9', route: '/(tabs)/catalog' },
-  { id: '3', name: 'Pestisida', icon: 'shield-checkmark', color: '#FF9800', bg: '#FFF3E0', route: '/(tabs)/catalog' },
-  { id: '4', name: 'Alat Tani', icon: 'construct', color: '#F44336', bg: '#FFEBEE', route: '/(tabs)/catalog' },
-  { id: '5', name: 'Konsultasi', icon: 'people', color: '#2196F3', bg: '#E3F2FD', route: '/(tabs)/experts' },
-  { id: '6', name: 'Artikel', icon: 'newspaper', color: '#9C27B0', bg: '#F3E5F5', route: '/(tabs)/articles' },
-  { id: '7', name: 'Paket Tani', icon: 'cube', color: '#009688', bg: '#E0F2F1', route: '/(tabs)/catalog' },
-  { id: '8', name: 'Promo', icon: 'pricetag', color: '#E91E63', bg: '#FCE4EC', route: '/(tabs)/catalog' },
+  { id: '2', name: 'Benih', icon: 'flower-outline', color: '#8BC34A', bg: '#F1F8E9', route: '/(tabs)/catalog' },
+  { id: '3', name: 'Pupuk', icon: 'flask', color: '#CDDC39', bg: '#F9FBE7', route: '/(tabs)/catalog' },
+  { id: '4', name: 'Media Tanam', icon: 'layers', color: '#795548', bg: '#EFEBE9', route: '/(tabs)/catalog' },
+  { id: '5', name: 'Pestisida', icon: 'shield-checkmark', color: '#FF9800', bg: '#FFF3E0', route: '/(tabs)/catalog' },
+  { id: '6', name: 'Alat Tani', icon: 'construct', color: '#F44336', bg: '#FFEBEE', route: '/(tabs)/catalog' },
+  { id: '7', name: 'Konsultasi', icon: 'people', color: '#2196F3', bg: '#E3F2FD', route: '/(tabs)/experts' },
+  { id: '8', name: 'Artikel', icon: 'newspaper', color: '#9C27B0', bg: '#F3E5F5', route: '/(tabs)/articles' },
+  { id: '9', name: 'Paket Tani', icon: 'cube', color: '#009688', bg: '#E0F2F1', route: '/(tabs)/catalog' },
+  { id: '10', name: 'Promo', icon: 'pricetag', color: '#E91E63', bg: '#FCE4EC', route: '/(tabs)/catalog' },
 ];
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user, getCartCount, getUnreadCount } = useApp();
-  const [activeBanner, setActiveBanner] = useState(0);
+  const { user, getCartCount, getUnreadCount, addresses } = useApp();
+  const defaultAddress = addresses?.find((a: any) => a.isDefault) || addresses?.[0];
+
+  const currentIndexRef = React.useRef(INITIAL_INDEX);
+  const [activeDotIndex, setActiveDotIndex] = useState(0);
   const flatListRef = React.useRef<FlatList>(null);
   const [chatVisible, setChatVisible] = useState(false);
+  const [interstitialVisible, setInterstitialVisible] = useState(false);
   const chatAnim = React.useRef(new Animated.Value(0)).current;
+
+  // Flash Sale Timer & Animation
+  const [timeLeft, setTimeLeft] = useState(2 * 3600 + 45 * 60 + 10); // 2h 45m 10s
+  const flashAnim = React.useRef(new Animated.Value(0)).current;
+  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+
+  React.useEffect(() => {
+    setInterstitialVisible(true);
+  }, []);
+
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(flashAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(flashAnim, { toValue: 0, duration: 800, useNativeDriver: true })
+      ])
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.05, duration: 1200, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true })
+      ])
+    ).start();
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatTime = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${h.toString().padStart(2, '0')} : ${m.toString().padStart(2, '0')} : ${s.toString().padStart(2, '0')}`;
+  };
 
   const openCSChat = () => {
     setChatVisible(true);
@@ -171,91 +124,159 @@ export default function HomeScreen() {
 
   React.useEffect(() => {
     const interval = setInterval(() => {
-      const nextIndex = (activeBanner + 1) % BANNERS.length;
-      setActiveBanner(nextIndex);
-      flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+      const nextIndex = currentIndexRef.current + 1;
+      if (nextIndex < INFINITE_BANNERS.length) {
+        currentIndexRef.current = nextIndex;
+        setActiveDotIndex(nextIndex % BANNERS.length);
+        flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true, viewPosition: 0.5 });
+      }
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [activeBanner]);
+  }, []);
 
   const onScroll = (event: any) => {
-    const slide = Math.ceil(event.nativeEvent.contentOffset.x / event.nativeEvent.layoutMeasurement.width);
-    if (slide !== activeBanner && slide >= 0 && slide < BANNERS.length) {
-      setActiveBanner(slide);
+    const slide = Math.round(event.nativeEvent.contentOffset.x / BANNER_WIDTH);
+    if (slide !== currentIndexRef.current && slide >= 0 && slide < INFINITE_BANNERS.length) {
+      currentIndexRef.current = slide;
+      setActiveDotIndex(slide % BANNERS.length);
     }
   };
 
   const onlineExperts = EXPERTS.filter(e => e.isOnline).slice(0, 6);
-  const promoProducts = PRODUCTS.filter(p => p.originalPrice).slice(0, 6);
-  const popularProducts = PRODUCTS.sort((a, b) => b.sold - a.sold).slice(0, 6);
+  const featuredRealProducts = PRODUCTS.filter((p) => p.id.startsWith('rp'));
+  const promoProducts = featuredRealProducts.filter(p => p.originalPrice).slice(0, 6);
+  const flashSaleProducts = [...featuredRealProducts].filter(p => p.originalPrice).sort((a, b) => (b.originalPrice! - b.price) - (a.originalPrice! - a.price)).slice(0, 6);
+  const popularProducts = [...PRODUCTS].sort((a, b) => b.sold - a.sold).slice(0, 6);
+  const newProducts = [...PRODUCTS].reverse().slice(0, 6);
   const latestArticles = ARTICLES.slice(0, 3);
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View style={styles.headerLeft}>
+      <Modal
+        visible={interstitialVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setInterstitialVisible(false)}
+      >
+        <View style={styles.interstitialOverlay}>
+          <View style={styles.interstitialCard}>
+            <TouchableOpacity
+              style={styles.interstitialCloseButton}
+              onPress={() => setInterstitialVisible(false)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="close" size={20} color={COLORS.text} />
+            </TouchableOpacity>
+
             <Image
-              source={{ uri: 'https://d64gsuwffb70l.cloudfront.net/698c32f324d41fa898aee39d_1770799657846_84477df5.png' }}
-              style={styles.headerLogo}
-              resizeMode="contain"
+              source={require('../../assets/images/interstitial.png')}
+              style={styles.interstitialImage}
             />
-            <View>
-              <Text style={styles.greeting}>Halo, {user.name.split(' ')[0]}!</Text>
-              <Text style={styles.subGreeting}>Mau berkebun apa hari ini?</Text>
-            </View>
-          </View>
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/notifications')}>
-              <Ionicons name="notifications-outline" size={22} color={COLORS.text} />
-              {getUnreadCount() > 0 && (
-                <View style={styles.notifBadge}>
-                  <Text style={styles.notifBadgeText}>{getUnreadCount()}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/cart')}>
-              <Ionicons name="cart-outline" size={22} color={COLORS.text} />
-              {getCartCount() > 0 && (
-                <View style={styles.notifBadge}>
-                  <Text style={styles.notifBadgeText}>{getCartCount()}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
           </View>
         </View>
-        {/* Search */}
-        {/* <TouchableOpacity style={styles.searchBar} onPress={() => router.push('/(tabs)/catalog')}>
-          <Ionicons name="search-outline" size={18} color={COLORS.textLight} />
-          <Text style={styles.searchPlaceholder}>Cari bibit, pupuk, ahli pertanian...</Text>
-        </TouchableOpacity> */}
+      </Modal>
+
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.searchBar} onPress={() => router.push('/(tabs)/catalog')} activeOpacity={0.9}>
+          <Ionicons name="search-outline" size={20} color={COLORS.textLight} />
+          <Text style={styles.searchPlaceholder}>Cari produk, kategori...</Text>
+        </TouchableOpacity>
+
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/notifications')}>
+            <Ionicons name="notifications-outline" size={24} color={COLORS.white} />
+            {getUnreadCount() > 0 && (
+              <View style={styles.notifBadge}>
+                <Text style={styles.notifBadgeText}>{getUnreadCount()}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/cart')}>
+            <Ionicons name="cart-outline" size={24} color={COLORS.white} />
+            {getCartCount() > 0 && (
+              <View style={styles.notifBadge}>
+                <Text style={styles.notifBadgeText}>{getCartCount()}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={openCSChat}>
+            <Ionicons name="headset-outline" size={24} color={COLORS.white} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+        {/* Delivery & Store Info */}
+        <View style={styles.deliveryContainer}>
+          <TouchableOpacity style={styles.deliveryItem} activeOpacity={0.7} onPress={() => router.push('/addresses')}>
+            <Ionicons name="location" size={16} color={COLORS.primary} />
+            <Text style={styles.deliveryLabel} numberOfLines={1}>
+              Kirim ke: <Text style={styles.deliveryValue}>{defaultAddress ? defaultAddress.label : 'Pilih Alamat'}</Text>
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Loyalty Widget */}
+        <View style={styles.loyaltyContainer}>
+          <LinearGradient
+            colors={['#ffffff', '#fef9c3']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.loyaltyInner}
+          >
+            {/* Coins Section (Left) */}
+            <TouchableOpacity activeOpacity={0.7} style={styles.loyaltyCoin} onPress={() => router.push('/coin-history')}>
+              <View style={styles.loyaltyCoinIcon}>
+                <Ionicons name="gift" size={16} color="#d97706" />
+              </View>
+              <View style={styles.loyaltyCoinContext}>
+                <Text style={styles.loyaltyCoinValue}>{user.trubusCoins ? user.trubusCoins.toLocaleString('id-ID') : 0}</Text>
+                <Text style={styles.loyaltyCoinLabel}>Trubus Coin</Text>
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.loyaltyDivider} />
+
+            {/* Membership Section (Right) */}
+            <TouchableOpacity activeOpacity={0.7} style={styles.loyaltyMember} onPress={() => router.push('/membership')}>
+              <View style={styles.loyaltyMemberIconWrap}>
+                <Ionicons name="ribbon" size={16} color="#d97706" />
+              </View>
+              <View style={styles.loyaltyMemberContext}>
+                <Text style={styles.loyaltyMemberText}>Gold</Text>
+                <Text style={styles.loyaltyMemberLabel}>Membership</Text>
+              </View>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+
         {/* Banner Carousel */}
         <View>
           <FlatList
             ref={flatListRef}
-            data={BANNERS}
-            keyExtractor={(item) => item.id}
+            data={INFINITE_BANNERS}
+            keyExtractor={(item) => item.uniqueId}
             horizontal
-            pagingEnabled
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 0 }} // Managed by item width
             onScroll={onScroll}
             scrollEventThrottle={16}
-            renderItem={({ item }) => (
-              <View style={{ width: width - SPACING.lg * 2, marginHorizontal: SPACING.lg }}>
-                <BannerCard
-                  banner={item}
-                  onPress={() => router.push(item.route as any)}
-                />
-              </View>
-            )}
+            snapToInterval={BANNER_WIDTH}
             snapToAlignment="center"
             decelerationRate="fast"
+            initialScrollIndex={INITIAL_INDEX}
+            getItemLayout={(data, index) => ({
+              length: BANNER_WIDTH,
+              offset: BANNER_WIDTH * index,
+              index,
+            })}
+            renderItem={({ item }) => (
+              <View style={{ width: BANNER_WIDTH, paddingHorizontal: SPACING.xs }}>
+                <BannerCard banner={item} />
+              </View>
+            )}
           />
 
           {/* Pagination/Dots */}
@@ -265,7 +286,7 @@ export default function HomeScreen() {
                 key={index}
                 style={[
                   styles.dot,
-                  activeBanner === index ? styles.dotActive : styles.dotInactive,
+                  activeDotIndex === index ? styles.dotActive : styles.dotInactive,
                 ]}
               />
             ))}
@@ -278,7 +299,7 @@ export default function HomeScreen() {
             {QUICK_MENU.map((item) => (
               <TouchableOpacity key={item.id} style={styles.quickMenuItem} onPress={() => router.push(item.route as any)}>
                 <View style={[styles.quickMenuIcon, { backgroundColor: item.color + '15' }]}>
-                  <Ionicons name={item.icon as any} size={32} color={item.color} />
+                  <Ionicons name={item.icon as any} size={28} color={item.color} />
                 </View>
                 <Text style={styles.quickMenuText}>{item.name}</Text>
               </TouchableOpacity>
@@ -286,24 +307,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Trubus Coins */}
-        {/* <View style={styles.sectionPadded}>
-          <TouchableOpacity style={styles.coinCard} onPress={() => router.push('/top-up')}>
-            <View style={styles.coinLeft}>
-              <View style={styles.coinIconWrap}>
-                <Ionicons name="wallet" size={24} color={COLORS.coinColor} />
-              </View>
-              <View>
-                <Text style={styles.coinLabel}>Trubus Pay</Text>
-                <Text style={styles.coinAmount}>Rp {user.trubusCoins.toLocaleString('id-ID')}</Text>
-              </View>
-            </View>
-            <TouchableOpacity style={styles.topUpBtn} onPress={() => router.push('/top-up')}>
-              <Ionicons name="add-circle" size={16} color={COLORS.primary} />
-              <Text style={styles.topUpText}>Top Up</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </View> */}
+
 
         {/* Online Experts */}
         <View style={styles.section}>
@@ -313,30 +317,83 @@ export default function HomeScreen() {
               <Text style={styles.seeAll}>Lihat Semua</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: SPACING.lg }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={CARD_WIDTH + SPACING.md} decelerationRate="fast" snapToAlignment="start" contentContainerStyle={{ paddingHorizontal: SPACING.lg }}>
             {onlineExperts.map((expert) => (
               <ExpertCard key={expert.id} expert={expert} />
             ))}
           </ScrollView>
         </View>
 
+        {/* Flash Sale */}
+        <View style={[styles.section, { backgroundColor: '#fff5f5', paddingTop: SPACING.md }]}>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => router.push('/(tabs)/catalog')}
+            style={styles.flashHeaderContainer}
+          >
+            <LinearGradient
+              colors={['#ef4444', '#f97316', '#eab308']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+
+            {/* Background Image of lightning/fire texture */}
+            <Image
+              source={{ uri: 'https://images.unsplash.com/photo-1605806616949-1e87b487cb2a?q=80&w=500&auto=format&fit=crop' }}
+              style={[StyleSheet.absoluteFill, { opacity: 0.2, resizeMode: 'cover' }]}
+            />
+
+            {/* Animated lightning overlay */}
+            <Animated.View style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: 'rgba(255, 255, 255, 0.4)',
+                opacity: flashAnim
+              }
+            ]} />
+
+            <View style={styles.flashHeaderContent}>
+              <View style={styles.flashTitleRow}>
+                <Ionicons name="flash" size={20} color="#fef08a" />
+                <Text style={styles.flashTitleText}>FLASH SALE</Text>
+              </View>
+
+              <View style={styles.countdownContainer}>
+                <Ionicons name="time-outline" size={14} color="#FFF" style={{ marginRight: 4 }} />
+                <Text style={styles.countdownText}>{formatTime(timeLeft)}</Text>
+              </View>
+
+              <View style={styles.flashSeeAll}>
+                <Text style={styles.flashSeeAllText}>Lihat Semua</Text>
+                <Ionicons name="chevron-forward" size={14} color="#FFF" />
+              </View>
+            </View>
+          </TouchableOpacity>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={CARD_WIDTH + SPACING.md} decelerationRate="fast" snapToAlignment="start" contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingBottom: SPACING.md }}>
+            {flashSaleProducts.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </ScrollView>
+        </View>
+
         {/* Promo Products */}
-        {/* <View style={styles.section}>
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
-              <Ionicons name="flash" size={18} color={COLORS.accent} />
+              <Ionicons name="pricetag" size={18} color={COLORS.primary} />
               <Text style={[styles.sectionTitle, { marginLeft: 4 }]}>Promo Spesial</Text>
             </View>
             <TouchableOpacity onPress={() => router.push('/(tabs)/catalog')}>
               <Text style={styles.seeAll}>Lihat Semua</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: SPACING.lg }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={CARD_WIDTH + SPACING.md} decelerationRate="fast" snapToAlignment="start" contentContainerStyle={{ paddingHorizontal: SPACING.lg }}>
             {promoProducts.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </ScrollView>
-        </View> */}
+        </View>
 
         {/* Popular Products */}
         <View style={styles.section}>
@@ -346,8 +403,23 @@ export default function HomeScreen() {
               <Text style={styles.seeAll}>Lihat Semua</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: SPACING.lg }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={CARD_WIDTH + SPACING.md} decelerationRate="fast" snapToAlignment="start" contentContainerStyle={{ paddingHorizontal: SPACING.lg }}>
             {popularProducts.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* New Products */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Produk Terbaru</Text>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/catalog')}>
+              <Text style={styles.seeAll}>Lihat Semua</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={CARD_WIDTH + SPACING.md} decelerationRate="fast" snapToAlignment="start" contentContainerStyle={{ paddingHorizontal: SPACING.lg }}>
+            {newProducts.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </ScrollView>
@@ -370,39 +442,59 @@ export default function HomeScreen() {
 
         {/* Consult Expert CTA */}
         <View style={{ paddingHorizontal: SPACING.lg, marginTop: SPACING.xl, marginBottom: SPACING.lg }}>
-          <View style={styles.ctaContainer}>
+          <View style={[styles.ctaContainer, { position: 'relative' }]}>
             <LinearGradient
-              colors={['#15803d', '#059669']} // green-700 to emerald-600
+              colors={['#065f46', '#10b981', '#059669']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
 
+            {/* Background Texture */}
+            <Image
+              source={{ uri: 'https://images.unsplash.com/photo-1592982537447-6f296c026b7a?q=80&w=600&auto=format&fit=crop' }}
+              style={[StyleSheet.absoluteFill, { opacity: 0.15, resizeMode: 'cover' }]}
+            />
+
             <View style={styles.ctaContent}>
-              {/* Overlapping Avatars */}
-              <View style={styles.avatarRow}>
-                {onlineExperts.slice(0, 4).map((expert, i) => (
-                  <Image
-                    key={expert.id}
-                    source={{ uri: expert.image }}
-                    style={[
-                      styles.ctaAvatar,
-                      { zIndex: 4 - i, marginLeft: i === 0 ? 0 : -16 }
-                    ]}
-                  />
-                ))}
+              <View style={styles.ctaHeaderRow}>
+                <View style={styles.ctaTextContainer}>
+                  <View style={styles.liveBadgeWrapper}>
+                    <Animated.View style={[styles.liveIndicator, { opacity: flashAnim }]} />
+                    <Text style={styles.liveBadgeText}>ON CALL</Text>
+                  </View>
+                  <Text style={styles.ctaTitle}>Butuh Solusi Cepat?</Text>
+                  <Text style={styles.ctaSubtitle}>Tanya pakar kami secara langsung seputar pertanian.</Text>
+                </View>
+
+                {/* Overlapping Avatars */}
+                <View style={styles.avatarRow}>
+                  {onlineExperts.slice(0, 3).map((expert, i) => (
+                    <Image
+                      key={expert.id}
+                      source={{ uri: expert.image }}
+                      style={[
+                        styles.ctaAvatar,
+                        { zIndex: 3 - i, marginLeft: i === 0 ? 0 : -12 }
+                      ]}
+                    />
+                  ))}
+                  <View style={styles.ctaMoreAvatar}>
+                    <Text style={styles.ctaMoreAvatarText}>+8</Text>
+                  </View>
+                </View>
               </View>
 
-              <Text style={styles.ctaTitle}>Butuh Solusi Cepat?</Text>
-              <Text style={styles.ctaSubtitle}>Tanya apa saja seputar pertanian kepada tim ahli kami.</Text>
-
-              <TouchableOpacity
-                style={styles.ctaButton}
-                onPress={() => router.push('/(tabs)/experts')}
-              >
-                <Ionicons name="chatbubble-ellipses" size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.ctaButtonText}>Hubungi Ahli</Text>
-              </TouchableOpacity>
+              <Animated.View style={{ transform: [{ scale: pulseAnim }], width: '100%' }}>
+                <TouchableOpacity
+                  style={[styles.ctaButton, SHADOWS.medium]}
+                  onPress={() => router.push('/(tabs)/experts')}
+                  activeOpacity={0.9}
+                >
+                  <Ionicons name="chatbubbles-outline" size={18} color="#059669" style={{ marginRight: 8 }} />
+                  <Text style={styles.ctaButtonText}>Mulai Konsultasi Gratis</Text>
+                </TouchableOpacity>
+              </Animated.View>
             </View>
           </View>
         </View>
@@ -440,62 +532,98 @@ export default function HomeScreen() {
         </Animated.View>
       )}
 
-      {/* Customer Service Floating Action Button */}
-      {!chatVisible && (
-        <Animated.View style={[styles.fabCSContainer, {
-          opacity: chatAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
-          transform: [{ scale: chatAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]
-        }]}>
-          <TouchableOpacity
-            style={styles.fabCS}
-            onPress={openCSChat}
-            activeOpacity={0.9}
-          >
-            <Ionicons name="logo-whatsapp" size={28} color={COLORS.white} />
-          </TouchableOpacity>
-        </Animated.View>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+  interstitialOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.lg,
+  },
+  interstitialCard: {
+    width: '100%',
+    maxWidth: 460,
+    position: 'relative',
+  },
+  interstitialCloseButton: {
+    position: 'absolute',
+    top: 28,
+    right: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+    ...SHADOWS.small,
+  },
+  interstitialImage: {
+    width: '100%',
+    height: undefined,
+    aspectRatio: 1080 / 1350,
+    resizeMode: 'contain',
+    transform: [{ scale: 1.14 }],
+  },
   header: {
-    backgroundColor: COLORS.white, paddingTop: 48, paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.xs, marginBottom: SPACING.md, ...SHADOWS.small,
+    backgroundColor: COLORS.primary,
+    paddingTop: 54,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...SHADOWS.small,
+    zIndex: 10,
   },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
-  headerLeft: { flexDirection: 'row', alignItems: 'center' },
-  headerLogo: { width: 40, height: 40, marginRight: SPACING.sm },
-  greeting: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  subGreeting: { fontSize: 14, color: COLORS.textSecondary },
-  headerRight: { flexDirection: 'row', gap: 8 },
-  iconBtn: { position: 'relative', padding: 6 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iconBtn: { position: 'relative', padding: 2 },
   notifBadge: {
-    position: 'absolute', top: 0, right: 0,
-    backgroundColor: COLORS.accent, borderRadius: 8, minWidth: 16, height: 16,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
+    position: 'absolute', top: -4, right: -4,
+    backgroundColor: COLORS.accent, borderRadius: 10, minWidth: 16, height: 16,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4,
+    borderWidth: 1.5, borderColor: COLORS.primary,
   },
-  notifBadgeText: { color: COLORS.white, fontSize: 9, fontWeight: '700' },
+  notifBadgeText: { color: COLORS.white, fontSize: 9, fontWeight: '800' },
   searchBar: {
+    flex: 1,
+    marginRight: 16,
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.background, borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm + 2,
-    borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: COLORS.white, borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACING.md, paddingVertical: 10,
   },
   searchPlaceholder: { fontSize: 13, color: COLORS.textLight, marginLeft: 8 },
   scrollView: { flex: 1 },
   bannerScroll: { marginTop: SPACING.lg },
+  loyaltyContainer: { marginHorizontal: SPACING.lg, marginTop: SPACING.md, marginBottom: SPACING.lg, backgroundColor: COLORS.white, borderRadius: RADIUS.lg, ...SHADOWS.small, borderWidth: 1, borderColor: '#fef08a', overflow: 'hidden' },
+  loyaltyInner: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16 },
+  // Coin Left
+  loyaltyCoin: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  loyaltyCoinIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#fef3c7', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  loyaltyCoinContext: { flex: 1, justifyContent: 'center' },
+  loyaltyCoinValue: { fontSize: 16, fontWeight: '500', color: COLORS.text, marginBottom: 2 },
+  loyaltyCoinLabel: { fontSize: 10, color: COLORS.textSecondary, fontWeight: '400' },
+
+  loyaltyDivider: { width: 1, height: 36, backgroundColor: '#fde68a', marginHorizontal: 16 },
+
+  // Member Right
+  loyaltyMember: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 8 },
+  loyaltyMemberIconWrap: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#fef3c7', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  loyaltyMemberContext: { flex: 1, justifyContent: 'center' },
+  loyaltyMemberText: { fontSize: 16, color: '#d97706', fontWeight: '500', marginBottom: 2 },
+  loyaltyMemberLabel: { fontSize: 10, color: COLORS.textSecondary, fontWeight: '400' },
 
   featuredBannerContainer: {
     width: '100%',
-    height: 220,
-    borderRadius: 30, // rounded-[2.5rem] approx
+    aspectRatio: 3392 / 1248,
+    backgroundColor: '#f1f5f9',
+    borderRadius: RADIUS.xs,
     overflow: 'hidden',
-    backgroundColor: '#022c22', // fallback
-    ...SHADOWS.medium,
-    shadowColor: '#14532d', // shadow-green-900/10
   },
   featuredBanner: { flex: 1, position: 'relative' },
   featuredBannerBg: { ...StyleSheet.absoluteFillObject, opacity: 0.5 },
@@ -534,7 +662,7 @@ const styles = StyleSheet.create({
   promoBannerContainer: {
     width: '100%',
     flex: 1,
-    height: 220,
+    height: 170,
     borderRadius: 30,
     overflow: 'hidden',
     ...SHADOWS.medium,
@@ -575,72 +703,110 @@ const styles = StyleSheet.create({
   quickMenu: {
     flexDirection: 'row', flexWrap: 'wrap',
     paddingHorizontal: SPACING.lg, justifyContent: 'space-between',
-    backgroundColor: COLORS.white, borderRadius: RADIUS.lg, marginHorizontal: SPACING.lg, paddingVertical: SPACING.md
+    backgroundColor: COLORS.white, borderRadius: RADIUS.md, marginHorizontal: SPACING.lg, paddingVertical: SPACING.md
   },
-  quickMenuItem: { width: '25%', alignItems: 'center', marginBottom: SPACING.md },
+  quickMenuItem: { width: '20%', alignItems: 'center', marginBottom: SPACING.md },
   quickMenuIcon: {
-    width: 64, height: 64, borderRadius: 20,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 8,
+    width: 52, height: 52, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
   },
-  quickMenuText: { fontSize: 14, color: COLORS.text, fontWeight: '600' },
-  coinCard: {
-    backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
-    padding: SPACING.lg, flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', ...SHADOWS.small,
-    borderWidth: 1, borderColor: '#FFF3E0',
-  },
-  coinLeft: { flexDirection: 'row', alignItems: 'center' },
-  coinIconWrap: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#FFF3E0', alignItems: 'center', justifyContent: 'center',
-    marginRight: SPACING.md,
-  },
-  coinLabel: { fontSize: 12, color: COLORS.textSecondary },
-  coinAmount: { fontSize: 18, fontWeight: '700', color: COLORS.coinColor },
-  topUpBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  topUpText: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
+  quickMenuText: { fontSize: 11, color: COLORS.text, fontWeight: '600', textAlign: 'center' },
 
   // CTA Component
   ctaContainer: {
-    borderRadius: 48,
+    borderRadius: 24,
     overflow: 'hidden',
-    backgroundColor: COLORS.primary,
     ...SHADOWS.medium,
   },
   ctaContent: {
-    padding: 32,
+    padding: 24,
+    paddingTop: 28,
+  },
+  ctaHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+  },
+  ctaTextContainer: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  liveBadgeWrapper: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  liveIndicator: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#ef4444', // red
+    marginRight: 6,
+  },
+  liveBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.white,
+    letterSpacing: 1,
   },
   avatarRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 24,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   ctaAvatar: {
-    width: 56, height: 56,
-    borderRadius: 16,
-    borderWidth: 4,
-    borderColor: '#16a34a', // green-600 matching gradient start roughly
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#059669',
+  },
+  ctaMoreAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#10b981',
+    marginLeft: -12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#059669',
+  },
+  ctaMoreAvatarText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   ctaTitle: {
-    fontSize: 20, fontWeight: '900', color: COLORS.white,
-    marginBottom: 8, letterSpacing: 0.5,
+    fontSize: 20,
+    fontWeight: '900',
+    color: COLORS.white,
+    marginBottom: 6,
   },
   ctaSubtitle: {
-    fontSize: 14, fontWeight: '500', color: 'rgba(236, 253, 245, 0.8)',
-    textAlign: 'center', marginBottom: 32, maxWidth: 240,
+    fontSize: 13,
+    color: 'rgba(240, 253, 244, 0.9)',
+    lineHeight: 18,
   },
   ctaButton: {
-    width: '100%',
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: COLORS.white,
-    paddingVertical: 20,
-    borderRadius: 28,
-    ...SHADOWS.medium,
+    paddingVertical: 14,
+    borderRadius: RADIUS.full,
+    width: '100%',
   },
   ctaButtonText: {
-    fontSize: 12, fontWeight: '900', color: '#16a34a',
-    textTransform: 'uppercase', letterSpacing: 2.4,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#059669',
   },
   fabCSContainer: {
     position: 'absolute',
@@ -659,6 +825,19 @@ const styles = StyleSheet.create({
     elevation: 6,
     shadowColor: COLORS.primary,
   },
+  fabMicBadge: {
+    position: 'absolute',
+    bottom: -3,
+    right: -3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
   chatWidgetContainer: {
     position: 'absolute',
     bottom: SPACING.xl,
@@ -668,5 +847,79 @@ const styles = StyleSheet.create({
     height: height * 0.7,
     zIndex: 100,
   },
+  flashHeaderContainer: {
+    marginHorizontal: SPACING.lg,
+    height: 56,
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+    marginBottom: SPACING.md,
+    ...SHADOWS.small,
+  },
+  flashHeaderContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+  },
+  flashTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  flashTitleText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: COLORS.white,
+    marginLeft: 6,
+    fontStyle: 'italic',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  countdownContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  countdownText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.white,
+    letterSpacing: 1,
+    fontVariant: ['tabular-nums'],
+  },
+  flashSeeAll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  flashSeeAllText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.white,
+    marginRight: 2,
+  },
+  deliveryContainer: {
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+  },
+  deliveryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  deliveryLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    flex: 1,
+  },
+  deliveryValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
 });
-// });

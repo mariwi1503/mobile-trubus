@@ -8,6 +8,7 @@ import { EXPERTS } from '../data/experts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
+    draft: { label: 'Menunggu Pembayaran', color: '#FF9800', bg: '#FFF3E0' },
     pending_payment: { label: 'Menunggu Pembayaran', color: '#FF9800', bg: '#FFF3E0' },
     paid: { label: 'Terjadwal', color: '#2196F3', bg: '#E3F2FD' },
     completed: { label: 'Selesai', color: '#4CAF50', bg: '#E8F5E9' },
@@ -67,7 +68,7 @@ export default function ConsultationsScreen({ isTab = false }: { isTab?: boolean
                                         // Consumer logic
                                         if (item.status === 'paid' || item.status === 'completed') {
                                             router.push(`/chat/${item.id}`);
-                                        } else if (item.status === 'pending_payment') {
+                                        } else if (item.status === 'pending_payment' || item.status === 'draft') {
                                             router.push({ pathname: '/payment', params: { orderId: item.id } });
                                         }
                                     }
@@ -108,7 +109,7 @@ export default function ConsultationsScreen({ isTab = false }: { isTab?: boolean
                                     {!isExpertUser && (
                                         <View style={styles.cardFooter}>
                                             <Text style={styles.feeAmount}>Rp {item.totalAmount.toLocaleString('id-ID')}</Text>
-                                            {item.status === 'pending_payment' ? (
+                                            {item.status === 'pending_payment' || item.status === 'draft' ? (
                                                 <TouchableOpacity
                                                     style={styles.payBtn}
                                                     onPress={() => router.push({ pathname: '/payment', params: { orderId: item.id } })}
@@ -153,7 +154,7 @@ const styles = StyleSheet.create({
     },
     startBtnText: { color: COLORS.white, fontSize: 15, fontWeight: '700' },
     card: {
-        backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
+        backgroundColor: COLORS.white, borderRadius: RADIUS.md,
         padding: SPACING.lg, marginTop: SPACING.md, ...SHADOWS.small,
     },
     cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },

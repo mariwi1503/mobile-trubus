@@ -64,7 +64,7 @@ export default function ArticleCard({ article, featured }: ArticleCardProps) {
 const styles = StyleSheet.create({
   // Featured card
   featuredCard: {
-    borderRadius: RADIUS.lg, overflow: 'hidden',
+    borderRadius: RADIUS.md, overflow: 'hidden',
     ...SHADOWS.medium, marginBottom: SPACING.lg, height: 200,
   },
   featuredImage: { width: '100%', height: '100%', backgroundColor: '#f0f0f0' },

@@ -1,30 +1,49 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
+import { useApp } from '../context/AppContext';
 
 export default function OrderSuccessScreen() {
   const router = useRouter();
   const { orderId, type } = useLocalSearchParams();
+  const { orders } = useApp();
+
+  const order = orders.find(o => o.id === orderId);
   const isConsultation = type === 'consultation';
+  const isDraft = order?.status === 'draft';
+  const isCoinRedemption = Boolean(order?.coinRedemptionCost);
+
+  const iconName = isDraft ? 'time' : 'checkmark';
+  const iconBg = isDraft ? '#FFF3E0' : COLORS.primaryBg;
+  const iconInnerBg = isDraft ? COLORS.accentOrange : COLORS.primary;
+  const title = isDraft
+    ? 'Pesanan Menunggu Pembayaran'
+    : isCoinRedemption
+    ? 'Penukaran Berhasil!'
+    : isConsultation
+    ? 'Konsultasi Berhasil!'
+    : 'Pembayaran Berhasil!';
+  const subtitle = isDraft
+    ? 'Pesananmu sudah kami catat. Segera selesaikan pembayaran agar pesanan dapat diproses.'
+    : isCoinRedemption
+    ? 'Hadiah dari Trubus Coin sedang kami proses. Kami akan memberi notifikasi saat pesanan siap dikirim atau diambil.'
+    : isConsultation
+    ? 'Jadwal konsultasi Anda telah dikonfirmasi. Tim ahli kami akan segera menghubungi Anda.'
+    : 'Pesananmu sedang diproses. Kami akan memberikan notifikasi ketika pesanan dikirim.';
 
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <View style={styles.iconCircle}>
-          <View style={styles.iconInner}>
-            <Ionicons name="checkmark" size={48} color={COLORS.white} />
+        <View style={[styles.iconCircle, { backgroundColor: iconBg }]}>
+          <View style={[styles.iconInner, { backgroundColor: iconInnerBg }]}>
+            <Ionicons name={iconName} size={48} color={COLORS.white} />
           </View>
         </View>
 
-        <Text style={styles.title}>Pesanan Berhasil Dibuat!</Text>
-        <Text style={styles.subtitle}>
-          {isConsultation
-            ? 'Jadwal konsultasi Anda telah berhasil dibuat. Silakan lakukan pembayaran untuk mengkonfirmasi jadwal.'
-            : 'Pesanan Anda telah berhasil dibuat. Silakan lakukan pembayaran agar pesanan segera diproses.'
-          }
-        </Text>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.subtitle}>{subtitle}</Text>
 
         <View style={styles.orderIdCard}>
           <Text style={styles.orderIdLabel}>ID Pesanan</Text>
@@ -32,34 +51,48 @@ export default function OrderSuccessScreen() {
         </View>
 
         <View style={styles.infoCard}>
-          <View style={styles.infoRow}>
-            <Ionicons name="time-outline" size={18} color={COLORS.accentOrange} />
-            <Text style={styles.infoText}>Selesaikan pembayaran dalam 24 jam</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Ionicons name="shield-checkmark-outline" size={18} color={COLORS.primary} />
-            <Text style={styles.infoText}>Transaksi Anda dilindungi oleh Trubus</Text>
-          </View>
+          {isDraft ? (
+            <>
+              <View style={styles.infoRow}>
+                <Ionicons name="alert-circle-outline" size={18} color={COLORS.accentOrange} />
+                <Text style={styles.infoText}>Selesaikan pembayaran dalam 24 jam</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Ionicons name="shield-checkmark-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.infoText}>Transaksi Anda dilindungi oleh Trubus</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.infoRow}>
+                <Ionicons name="notifications-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.infoText}>Notifikasi pengiriman akan dikirim ke akunmu</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Ionicons name="shield-checkmark-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.infoText}>Transaksi Anda dilindungi oleh Trubus</Text>
+              </View>
+            </>
+          )}
         </View>
       </View>
 
       <View style={styles.bottomSection}>
-        <TouchableOpacity
-          style={styles.payBtn}
-          onPress={() => router.push({ pathname: '/payment', params: { orderId: orderId as string } })}
-        >
-          <Ionicons name="wallet-outline" size={18} color={COLORS.white} />
-          <Text style={styles.payBtnText}>Lanjut Bayar</Text>
-        </TouchableOpacity>
+        {isDraft && (
+          <TouchableOpacity
+            style={styles.payBtn}
+            onPress={() => router.push({ pathname: '/payment', params: { orderId: orderId as string } })}
+          >
+            <Ionicons name="wallet-outline" size={18} color={COLORS.white} />
+            <Text style={styles.payBtnText}>Lanjut Bayar Sekarang</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={styles.viewOrderBtn}
           onPress={() => {
-            if (isConsultation) {
-              router.replace('/consultations');
-            } else {
-              router.replace('/orders');
-            }
+            if (isConsultation) router.replace('/consultations');
+            else router.replace('/orders');
           }}
         >
           <Text style={styles.viewOrderText}>
@@ -101,13 +134,13 @@ const styles = StyleSheet.create({
   bottomSection: { paddingHorizontal: 24, paddingBottom: 40 },
   payBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.md,
     paddingVertical: 16, marginBottom: 12,
   },
   payBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '700', marginLeft: 8 },
   viewOrderBtn: {
     alignItems: 'center', paddingVertical: 14,
-    borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: RADIUS.lg,
+    borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: RADIUS.md,
     marginBottom: 12,
   },
   viewOrderText: { color: COLORS.primary, fontSize: 15, fontWeight: '600' },

@@ -47,13 +47,6 @@ const PAYMENT_METHODS = [
       { id: 'shopeepay', name: 'ShopeePay', account: '081234567890', holder: '' },
     ],
   },
-  {
-    section: 'Trubus Coin',
-    icon: 'wallet-outline',
-    methods: [
-      { id: 'trubus_coin', name: 'Potong dari Trubus Coin', account: '', holder: '' },
-    ],
-  },
 ];
 
 export default function PaymentScreen() {
@@ -66,6 +59,7 @@ export default function PaymentScreen() {
   const insets = useSafeAreaInsets();
 
   const order = orders.find(o => o.id === orderId);
+  const isCoinRedemption = Boolean(order?.coinRedemptionCost);
   if (!order) {
     return (
       <View style={styles.container}>
@@ -81,6 +75,7 @@ export default function PaymentScreen() {
     );
   }
 
+
   const selectedPayment = PAYMENT_METHODS.flatMap(s => s.methods).find(m => m.id === selectedMethod);
 
   const handlePay = () => {
@@ -89,39 +84,24 @@ export default function PaymentScreen() {
       return;
     }
 
-    if (selectedMethod === 'trubus_coin') {
-      if (user.trubusCoins < order.totalAmount) {
-        showAlert('Saldo Tidak Cukup', 'Saldo Trubus Coin Anda tidak mencukupi. Silakan top up atau pilih metode lain.');
-        return;
-      }
-      showAlert(
-        'Konfirmasi',
-        `Potong Rp ${order.totalAmount.toLocaleString('id-ID')} dari Trubus Coin Anda?`,
-        [
-          { text: 'Batal', style: 'cancel' },
-          {
-            text: 'Bayar',
-            onPress: () => {
-              setUser({ ...user, trubusCoins: user.trubusCoins - order.totalAmount });
-              updateOrderPayment(orderId as string, 'Trubus Coin');
-              showAlert('Pembayaran Berhasil', 'Pembayaran dengan Trubus Coin berhasil!', [
-                { text: 'OK', onPress: () => router.replace('/(tabs)') },
-              ]);
-            },
-          },
-        ]
-      );
-      return;
-    }
 
     setShowDetail(true);
   };
 
   const handleConfirmPayment = () => {
+    if (isCoinRedemption && (user.trubusCoins || 0) < (order.coinRedemptionCost || 0)) {
+      showAlert('Coin Tidak Cukup', 'Jumlah Trubus Coin Anda sudah tidak mencukupi untuk penukaran ini.');
+      return;
+    }
+
+    const nextCoinBalance = isCoinRedemption
+      ? (user.trubusCoins || 0) - (order.coinRedemptionCost || 0)
+      : (user.trubusCoins || 0) + Math.floor(order.totalAmount / 100);
+
+    setUser({ ...user, trubusCoins: nextCoinBalance });
+    
     updateOrderPayment(orderId as string, selectedPayment?.name || selectedMethod);
-    showAlert('Pembayaran Dikonfirmasi', 'Pembayaran Anda sedang diverifikasi. Kami akan mengirim notifikasi setelah pembayaran dikonfirmasi.', [
-      { text: 'OK', onPress: () => router.replace('/(tabs)') },
-    ]);
+    router.replace({ pathname: '/order-success', params: { orderId: orderId as string, type: order?.type || 'product' } });
   };
 
   if (showDetail && selectedPayment) {
@@ -141,6 +121,14 @@ export default function PaymentScreen() {
             <Text style={styles.amountLabel}>Total Pembayaran</Text>
             <Text style={styles.amountValue}>Rp {order.totalAmount.toLocaleString('id-ID')}</Text>
           </View>
+          {isCoinRedemption && (
+            <View style={styles.coinRedemptionCard}>
+              <Ionicons name="gift-outline" size={18} color="#C77900" />
+              <Text style={styles.coinRedemptionText}>
+                Penukaran ini memakai {order.coinRedemptionCost?.toLocaleString('id-ID')} Trubus Coin.
+              </Text>
+            </View>
+          )}
 
           {/* Payment Info */}
           {selectedMethod === 'qris' ? (
@@ -224,6 +212,11 @@ export default function PaymentScreen() {
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>ID Pesanan: {order.id}</Text>
           <Text style={styles.summaryAmount}>Rp {order.totalAmount.toLocaleString('id-ID')}</Text>
+          {isCoinRedemption && (
+            <Text style={styles.summaryCoinText}>
+              + {order.coinRedemptionCost?.toLocaleString('id-ID')} coin ditukar
+            </Text>
+          )}
         </View>
 
         {/* Payment Methods */}
@@ -247,9 +240,6 @@ export default function PaymentScreen() {
                     <Image source={LOGO_MAP[method.id]} style={styles.methodLogo} resizeMode="contain" />
                   ) : null}
                   <Text style={styles.methodName}>{method.name}</Text>
-                  {method.id === 'trubus_coin' && (
-                    <Text style={styles.coinBalance}>Saldo: Rp {user.trubusCoins.toLocaleString('id-ID')}</Text>
-                  )}
                   <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} />
                 </TouchableOpacity>
               ))}
@@ -285,14 +275,27 @@ const styles = StyleSheet.create({
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   summaryCard: {
     backgroundColor: COLORS.primaryBg, marginHorizontal: SPACING.lg, marginTop: SPACING.lg,
-    borderRadius: RADIUS.lg, padding: SPACING.lg, alignItems: 'center',
+    borderRadius: RADIUS.md, padding: SPACING.lg, alignItems: 'center',
   },
   summaryLabel: { fontSize: 12, color: COLORS.textSecondary },
   summaryAmount: { fontSize: 24, fontWeight: '700', color: COLORS.primaryDark, marginTop: 4 },
+  summaryCoinText: { fontSize: 12, color: '#9A6700', marginTop: 6, fontWeight: '600' },
+  coinRedemptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFF7E0',
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#F2D17A',
+  },
+  coinRedemptionText: { flex: 1, fontSize: 12, color: '#7C5B00', lineHeight: 18 },
   methodSection: { marginTop: SPACING.lg, paddingHorizontal: SPACING.lg },
   methodSectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 6 },
   methodSectionTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  methodCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, ...SHADOWS.small },
+  methodCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.md, ...SHADOWS.small },
   methodItem: {
     flexDirection: 'row', alignItems: 'center', padding: SPACING.md,
   },
@@ -304,7 +307,6 @@ const styles = StyleSheet.create({
   methodRadioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.primary },
   methodLogo: { width: 32, height: 32, marginRight: 10, borderRadius: 4 },
   methodName: { flex: 1, fontSize: 14, color: COLORS.text, fontWeight: '500' },
-  coinBalance: { fontSize: 11, color: COLORS.coinColor, fontWeight: '600', marginRight: 8 },
   bottomBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: COLORS.white, flexDirection: 'row', alignItems: 'center',
@@ -322,13 +324,13 @@ const styles = StyleSheet.create({
   payBtnText: { color: COLORS.white, fontSize: 15, fontWeight: '700' },
   // Detail view
   amountCard: {
-    backgroundColor: COLORS.primaryBg, borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.primaryBg, borderRadius: RADIUS.md,
     padding: SPACING.xl, alignItems: 'center', marginBottom: SPACING.lg,
   },
   amountLabel: { fontSize: 13, color: COLORS.textSecondary },
   amountValue: { fontSize: 28, fontWeight: '700', color: COLORS.primaryDark, marginTop: 4 },
   detailCard: {
-    backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.white, borderRadius: RADIUS.md,
     padding: SPACING.lg, ...SHADOWS.small,
   },
   detailTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, marginBottom: SPACING.md },
@@ -355,7 +357,7 @@ const styles = StyleSheet.create({
   stepNumText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
   stepText: { fontSize: 13, color: COLORS.textSecondary, flex: 1 },
   confirmBtn: {
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.md,
     paddingVertical: 16, alignItems: 'center', marginTop: SPACING.xl,
   },
   confirmBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },

@@ -1,56 +1,37 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, Animated } from 'react-native';
+import { View, StyleSheet, Image, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
-import { COLORS } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 
 export default function SplashScreen() {
   const router = useRouter();
-  const { isOnboarded } = useApp();
+  const { isOnboarded, hasAcceptedTerms } = useApp();
   const [fadeAnim] = useState(new Animated.Value(0));
-  const [scaleAnim] = useState(new Animated.Value(0.8));
-  const [progressAnim] = useState(new Animated.Value(0));
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-      Animated.spring(scaleAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
-      Animated.timing(progressAnim, { toValue: 100, duration: 2500, useNativeDriver: false }), // animate progress
-    ]).start();
+    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
 
     const timer = setTimeout(() => {
-      if (isOnboarded) {
-        router.replace('/(tabs)');
-      } else {
+      if (!isOnboarded) {
         router.replace('/onboarding');
+      } else if (!hasAcceptedTerms) {
+        router.replace('/terms');
+      } else {
+        router.replace('/(tabs)');
       }
-    }, 2500);
+    }, 1000);
 
     return () => clearTimeout(timer);
-  }, [isOnboarded]);
-
-  const progressWidth = progressAnim.interpolate({
-    inputRange: [0, 100],
-    outputRange: ['0%', '100%'],
-  });
+  }, [hasAcceptedTerms, isOnboarded]);
 
   return (
     <View style={styles.container}>
-      <View style={styles.bgCircle1} />
-      <View style={styles.bgCircle2} />
-      <Animated.View style={[styles.logoContainer, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View style={[styles.imageContainer, { opacity: fadeAnim }]}>
         <Image
-          source={require('../assets/images/splash-icon.png')}
+          source={require('../assets/images/splash1.png')}
           style={styles.logo}
-          resizeMode="contain"
+          resizeMode="cover"
         />
-        <Text style={styles.tagline}>Solusi Tani Modern</Text>
-      </Animated.View>
-      <Animated.View style={[styles.bottomSection, { opacity: fadeAnim }]}>
-        <View style={styles.loadingBar}>
-          <Animated.View style={[styles.loadingFill, { width: progressWidth }]} />
-        </View>
-        <Text style={styles.version}>Versi 1.0.0</Text>
       </Animated.View>
     </View>
   );
@@ -59,37 +40,13 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F1F8E9',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#ffffff',
   },
-  bgCircle1: {
-    position: 'absolute', top: -100, right: -100,
-    width: 300, height: 300, borderRadius: 150,
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+  imageContainer: {
+    flex: 1,
   },
-  bgCircle2: {
-    position: 'absolute', bottom: -80, left: -80,
-    width: 250, height: 250, borderRadius: 125,
-    backgroundColor: 'rgba(76, 175, 80, 0.08)',
-  },
-  logoContainer: { alignItems: 'center' },
-  logo: { width: 300, height: 300 },
-  tagline: {
-    fontSize: 16, color: COLORS.primaryDark,
-    fontWeight: '500', marginTop: 8, letterSpacing: 1,
-  },
-  bottomSection: {
-    position: 'absolute', bottom: 60,
-    alignItems: 'center',
-  },
-  loadingBar: {
-    width: 120, height: 3, backgroundColor: 'rgba(76,175,80,0.2)',
-    borderRadius: 2, overflow: 'hidden',
-  },
-  loadingFill: {
+  logo: {
+    width: '100%',
     height: '100%',
-    backgroundColor: COLORS.primary, borderRadius: 2,
   },
-  version: { fontSize: 12, color: COLORS.textLight, marginTop: 12 },
 });

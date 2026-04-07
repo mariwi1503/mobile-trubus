@@ -6,6 +6,7 @@ import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { PRODUCTS } from '../../data/products';
 import { useApp } from '../../context/AppContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getRequiredPackagingByProductId } from '../../data/packaging';
 
 export default function ProductDetailScreen() {
   const router = useRouter();
@@ -22,6 +23,8 @@ export default function ProductDetailScreen() {
   const isWished = wishlist.includes(product.id);
   const discount = product.originalPrice ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
   const relatedProducts = PRODUCTS.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4);
+  const requiredPackaging = getRequiredPackagingByProductId(product.id);
+  const imageSource = typeof product.image === 'string' ? { uri: product.image } : product.image;
 
   const handleAddToCart = () => {
     addToCart({
@@ -63,7 +66,7 @@ export default function ProductDetailScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Product Image */}
-        <Image source={{ uri: product.image }} style={styles.productImage} />
+        <Image source={imageSource} style={styles.productImage} />
 
         {/* Product Info */}
         <View style={styles.infoSection}>
@@ -114,6 +117,20 @@ export default function ProductDetailScreen() {
           <Text style={styles.descText}>{product.description}</Text>
         </View>
 
+        {requiredPackaging && (
+          <View style={styles.packagingCard}>
+            <View style={styles.packagingIcon}>
+              <Ionicons name="cube-outline" size={18} color={COLORS.primary} />
+            </View>
+            <View style={styles.packagingContent}>
+              <Text style={styles.packagingTitle}>Butuh Packaging Tambahan</Text>
+              <Text style={styles.packagingText}>
+                Produk ini memerlukan {requiredPackaging.name}. Jika belum ada di keranjang, sistem akan menambahkannya saat checkout.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Related Products */}
         {relatedProducts.length > 0 && (
           <View style={styles.relatedSection}>
@@ -125,7 +142,7 @@ export default function ProductDetailScreen() {
                   style={styles.relatedCard}
                   onPress={() => router.push(`/product/${p.id}`)}
                 >
-                  <Image source={{ uri: p.image }} style={styles.relatedImage} />
+                  <Image source={typeof p.image === 'string' ? { uri: p.image } : p.image} style={styles.relatedImage} />
                   <Text style={styles.relatedName} numberOfLines={2}>{p.name}</Text>
                   <Text style={styles.relatedPrice}>Rp {p.price.toLocaleString('id-ID')}</Text>
                 </TouchableOpacity>
@@ -179,7 +196,7 @@ const styles = StyleSheet.create({
   productImage: { width: '100%', height: 320, backgroundColor: '#f0f0f0' },
   infoSection: {
     backgroundColor: COLORS.white, padding: SPACING.lg,
-    borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, marginTop: -20,
+    borderTopLeftRadius: RADIUS.md, borderTopRightRadius: RADIUS.md, marginTop: -20,
   },
   discountRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   discountBadge: { backgroundColor: '#FFEBEE', borderRadius: RADIUS.xs, paddingHorizontal: 6, paddingVertical: 2, marginRight: 8 },
@@ -206,6 +223,24 @@ const styles = StyleSheet.create({
   descSection: { backgroundColor: COLORS.white, marginTop: 8, padding: SPACING.lg },
   descTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 8 },
   descText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 20 },
+  packagingCard: {
+    backgroundColor: '#FFF8E8',
+    marginTop: 8,
+    padding: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  packagingIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFF0C2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  packagingContent: { flex: 1, marginLeft: SPACING.md },
+  packagingTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  packagingText: { fontSize: 12, color: COLORS.textSecondary, marginTop: 4, lineHeight: 18 },
   relatedSection: { padding: SPACING.lg },
   relatedTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: SPACING.md },
   relatedCard: {

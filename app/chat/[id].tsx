@@ -112,7 +112,7 @@ export default function ChatScreen() {
     return (
         <KeyboardAvoidingView
             style={[styles.container, { paddingBottom: insets.bottom }]}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
             <StatusBar barStyle="dark-content" />
@@ -142,6 +142,7 @@ export default function ChatScreen() {
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.messageList}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
                 renderItem={({ item }) => {
                     const isUser = item.sender === 'user';
                     return (
@@ -282,7 +283,7 @@ const styles = StyleSheet.create({
 
     messageList: { padding: SPACING.lg },
     messageBubble: {
-        maxWidth: '80%', padding: 10, borderRadius: RADIUS.lg, marginBottom: 12,
+        maxWidth: '80%', padding: 10, borderRadius: RADIUS.md, marginBottom: 12,
         ...SHADOWS.small
     },
     myMessage: { alignSelf: 'flex-end', backgroundColor: COLORS.primary, borderBottomRightRadius: 2 },

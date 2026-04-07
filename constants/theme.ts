@@ -1,3 +1,6 @@
+import { Dimensions } from 'react-native';
+const { width } = Dimensions.get('window');
+
 export const COLORS = {
   primary: '#4CAF50',
   primaryDark: '#388E3C',
@@ -19,7 +22,8 @@ export const COLORS = {
   error: '#F44336',
   info: '#2196F3',
   gold: '#FFD700',
-  coinColor: '#FFA000',
+  memberGold: '#FFB300',
+  coinColor: '#F5A623',
   white: '#FFFFFF',
   black: '#000000',
   overlay: 'rgba(0,0,0,0.5)',
@@ -38,14 +42,17 @@ export const FONTS = {
 };
 
 export const SPACING = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
+  xs: 2,
+  sm: 6,
+  md: 10,
+  lg: 12,
+  xl: 16,
+  xxl: 20,
+  xxxl: 24,
 };
+
+// 3 Cards per view: Total Width - 2*paddingHorizontal - 2*marginRight
+export const CARD_WIDTH = (width - (SPACING.lg * 2) - (SPACING.md * 2)) / 3;
 
 export const RADIUS = {
   xs: 4,

@@ -5,10 +5,13 @@ import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAlert } from '../context/AlertContext';
+import { getMissingPackagingForCart } from '../data/packaging';
 
 export default function CartScreen() {
   const router = useRouter();
-  const { cart, updateCartQuantity, removeFromCart, getCartTotal, clearCart } = useApp();
+  const { cart, updateCartQuantity, removeFromCart, getCartTotal, clearCart, addToCart } = useApp();
+  const { showAlert } = useAlert();
   const insets = useSafeAreaInsets();
 
   const handleRemove = (productId: string, name: string) => {
@@ -16,6 +19,48 @@ export default function CartScreen() {
       { text: 'Batal', style: 'cancel' },
       { text: 'Hapus', style: 'destructive', onPress: () => removeFromCart(productId) },
     ]);
+  };
+
+  const handleCheckout = () => {
+    const missingPackaging = getMissingPackagingForCart(cart);
+
+    if (missingPackaging.length > 0) {
+      const packagingSummary = missingPackaging
+        .map(({ packagingProduct, missingQuantity }) => `${packagingProduct.name} x${missingQuantity}`)
+        .join(', ');
+
+      showAlert(
+        'Packaging Tambahan Diperlukan',
+        `Beberapa produk di keranjang membutuhkan packaging ekstra. Tambahkan ${packagingSummary} ke keranjang sekarang?`,
+        [
+          { text: 'Nanti Saja', style: 'cancel' },
+          {
+            text: 'Tambah Packaging',
+            onPress: () => {
+              missingPackaging.forEach(({ packagingProduct, missingQuantity }) => {
+                addToCart({
+                  productId: packagingProduct.id,
+                  name: packagingProduct.name,
+                  price: packagingProduct.price,
+                  image: packagingProduct.image,
+                  quantity: missingQuantity,
+                  weight: packagingProduct.weight,
+                  store: packagingProduct.store,
+                });
+              });
+
+              showAlert(
+                'Packaging Ditambahkan',
+                'Packaging wajib sudah ditambahkan ke keranjang. Silakan review total belanja lalu tekan Checkout lagi.'
+              );
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    router.push('/checkout');
   };
 
   return (
@@ -51,7 +96,7 @@ export default function CartScreen() {
             <View style={styles.storeGroup}>
               {cart.map((item) => (
                 <View key={item.productId} style={styles.cartItem}>
-                  <Image source={{ uri: item.image }} style={styles.itemImage} />
+                  <Image source={typeof item.image === 'string' ? { uri: item.image } : item.image} style={styles.itemImage} />
                   <View style={styles.itemInfo}>
                     <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
                     <Text style={styles.itemPrice}>Rp {item.price.toLocaleString('id-ID')}</Text>
@@ -84,7 +129,7 @@ export default function CartScreen() {
               <Text style={styles.totalLabel}>Total</Text>
               <Text style={styles.totalAmount}>Rp {getCartTotal().toLocaleString('id-ID')}</Text>
             </View>
-            <TouchableOpacity style={styles.checkoutBtn} onPress={() => router.push('/checkout')}>
+            <TouchableOpacity style={styles.checkoutBtn} onPress={handleCheckout}>
               <Text style={styles.checkoutText}>Checkout ({cart.reduce((s, i) => s + i.quantity, 0)})</Text>
               <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
             </TouchableOpacity>
@@ -113,7 +158,7 @@ const styles = StyleSheet.create({
   shopBtnText: { color: COLORS.white, fontSize: 15, fontWeight: '700' },
   storeGroup: {
     backgroundColor: COLORS.white, marginHorizontal: SPACING.lg, marginTop: SPACING.md,
-    borderRadius: RADIUS.lg, ...SHADOWS.small, overflow: 'hidden',
+    borderRadius: RADIUS.md, ...SHADOWS.small, overflow: 'hidden',
   },
   storeHeader: {
     flexDirection: 'row', alignItems: 'center', padding: SPACING.md,

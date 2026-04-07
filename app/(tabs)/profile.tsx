@@ -42,13 +42,13 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
       ...(role === 'expert' ? { specialization, experience: 1, fee: 50000 } : {}),
     };
     const result = register(data);
-    if (result.success) { reset(); onClose(); showAlert('Selamat!', 'Registrasi berhasil! Anda mendapat bonus 50.000 Trubus Coin.'); }
+    if (result.success) { reset(); onClose(); showAlert('Selamat!', 'Registrasi berhasil!'); }
     else setError(result.error || 'Registrasi gagal');
   };
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}>
         <View style={styles.modalContent}>
           <View style={styles.modalHandle} />
           <View style={styles.modalHeader}>
@@ -64,7 +64,7 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
             <Text style={styles.logoText}>Halo Trubus</Text>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.authScrollContent}>
             {error ? <View style={styles.errorBox}><Ionicons name="alert-circle" size={16} color={COLORS.accent} /><Text style={styles.errorText}>{error}</Text></View> : null}
 
             {mode === 'register' && (
@@ -109,15 +109,18 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
             )}
 
             {mode === 'login' && (
-              <View style={styles.demoContainer}>
-                <Text style={styles.hintText}>Demo (Klik untuk isi):</Text>
-                <TouchableOpacity onPress={() => { setPhone('081234567890'); setPassword('123456'); }}>
-                  <Text style={styles.demoLink}>Konsumen: 081234567890 / 123456</Text>
-                </TouchableOpacity>
-                {/* <TouchableOpacity onPress={() => { setPhone('081298765432'); setPassword('123456'); }}>
-                  <Text style={styles.demoLink}>Ahli: 081298765432 / 123456</Text>
-                </TouchableOpacity> */}
-              </View>
+              <TouchableOpacity
+                style={styles.demoQuickBtn}
+                onPress={() => {
+                  const result = login('081234567890', '123456');
+                  if (result.success) { reset(); onClose(); }
+                  else setError(result.error || 'Login gagal');
+                }}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="flash" size={15} color={COLORS.primary} />
+                <Text style={styles.demoQuickBtnText}>Quick Login (Demo)</Text>
+              </TouchableOpacity>
             )}
 
             <TouchableOpacity style={styles.submitBtn} onPress={mode === 'login' ? handleLogin : handleRegister}>
@@ -220,11 +223,6 @@ function ExpertDashboard() {
             <Text style={styles.earningsAmount}>Rp {totalEarnings.toLocaleString('id-ID')}</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.coinRow} onPress={() => router.push('/top-up')}>
-          <Ionicons name="wallet" size={18} color={COLORS.coinColor} />
-          <Text style={styles.coinText}>Saldo: Rp {user.trubusCoins.toLocaleString('id-ID')}</Text>
-          <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
-        </TouchableOpacity>
       </View>
 
       {/* Stats Grid */}
@@ -322,7 +320,10 @@ function ExpertDashboard() {
         {[
           { icon: 'receipt-outline', label: 'Riwayat Konsultasi', route: '/consultations', color: '#2196F3' },
           { icon: 'notifications-outline', label: 'Notifikasi', route: '/notifications', color: '#9C27B0' },
-          { icon: 'settings-outline', label: 'Pengaturan Profil', route: '', color: '#607D8B' },
+          { icon: 'document-text-outline', label: 'FAQ', route: '/faq', color: '#4CAF50' },
+          { icon: 'reader-outline', label: 'Syarat & Ketentuan', route: '/terms?readonly=1', color: '#7C3AED' },
+          { icon: 'information-circle-outline', label: 'Tentang Aplikasi', route: '/about', color: '#43A047' },
+          { icon: 'star-outline', label: 'Beri Rating', route: '/rate-app', color: '#FFC107' },
           { icon: 'help-circle-outline', label: 'Pusat Bantuan', route: '/customer-service', color: '#00BCD4' },
         ].map((item, i) => (
           <TouchableOpacity key={i} style={styles.menuItem} onPress={() => item.route ? router.push(item.route as any) : showAlert('Info', 'Fitur segera hadir!')}>
@@ -365,14 +366,15 @@ function ConsumerProfile() {
       section: 'Akun', items: [
         { id: 'addresses', icon: 'location-outline', label: 'Alamat Pengiriman', route: '/addresses', color: '#FF9800' },
         { id: 'notifications', icon: 'notifications-outline', label: 'Notifikasi', route: '/notifications', color: '#9C27B0' },
-        { id: 'settings', icon: 'settings-outline', label: 'Pengaturan', route: '', color: '#607D8B' },
       ]
     },
     {
       section: 'Lainnya', items: [
+        { id: 'faq', icon: 'document-text-outline', label: 'FAQ', route: '/faq', color: '#4CAF50' },
+        { id: 'terms', icon: 'reader-outline', label: 'Syarat & Ketentuan', route: '/terms?readonly=1', color: '#7C3AED' },
         { id: 'help', icon: 'help-circle-outline', label: 'Pusat Bantuan', route: '/customer-service', color: '#00BCD4' },
-        { id: 'about', icon: 'information-circle-outline', label: 'Tentang Aplikasi', route: '', color: '#4CAF50' },
-        { id: 'rate', icon: 'star-outline', label: 'Beri Rating', route: '', color: '#FFC107' },
+        { id: 'about', icon: 'information-circle-outline', label: 'Tentang Aplikasi', route: '/about', color: '#4CAF50' },
+        { id: 'rate', icon: 'star-outline', label: 'Beri Rating', route: '/rate-app', color: '#FFC107' },
       ]
     },
   ];
@@ -391,25 +393,6 @@ function ConsumerProfile() {
         </View>
       </View>
 
-      {/* Trubus Coins */}
-      <View style={styles.coinCard}>
-        <View style={styles.coinCardHeader}>
-          <View style={styles.coinCardLeft}>
-            <View style={styles.coinIconWrap}><Ionicons name="wallet" size={28} color={COLORS.coinColor} /></View>
-            <View><Text style={styles.coinLabel}>Saldo Trubus Coin</Text><Text style={styles.coinAmount}>Rp {user.trubusCoins.toLocaleString('id-ID')}</Text></View>
-          </View>
-        </View>
-        <View style={styles.coinActions}>
-          {[{ icon: 'add-circle', label: 'Top Up', bg: '#E8F5E9', color: COLORS.primary },
-          { icon: 'swap-horizontal', label: 'Transfer', bg: '#FFF3E0', color: COLORS.accentOrange },
-          { icon: 'time', label: 'Riwayat', bg: '#E3F2FD', color: COLORS.info }].map((a, i) => (
-            <TouchableOpacity key={i} style={styles.coinAction} onPress={() => router.push('/top-up')}>
-              <View style={[styles.coinActionIcon, { backgroundColor: a.bg }]}><Ionicons name={a.icon as any} size={20} color={a.color} /></View>
-              <Text style={styles.coinActionText}>{a.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
 
       {/* Order Status */}
       <View style={styles.orderStatusCard}>
@@ -478,7 +461,6 @@ function GuestProfile({ onLogin }: { onLogin: () => void }) {
           {[
             { icon: 'chatbubbles', text: 'Konsultasi ahli pertanian' },
             { icon: 'cart', text: 'Belanja bibit, pupuk & alat tani' },
-            { icon: 'wallet', text: 'Kelola saldo Trubus Coin' },
             { icon: 'receipt', text: 'Lacak pesanan & konsultasi' },
           ].map((f, i) => (
             <View key={i} style={styles.guestFeatureRow}>
@@ -523,6 +505,7 @@ const styles = StyleSheet.create({
   // Auth Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: COLORS.white, borderTopLeftRadius: RADIUS.xxl, borderTopRightRadius: RADIUS.xxl, padding: SPACING.xl, maxHeight: '90%' },
+  authScrollContent: { paddingBottom: SPACING.lg },
   modalHandle: { width: 40, height: 4, backgroundColor: COLORS.border, borderRadius: 2, alignSelf: 'center', marginBottom: 12 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   modalTitle: { fontSize: 22, fontWeight: '700', color: COLORS.text },
@@ -544,7 +527,25 @@ const styles = StyleSheet.create({
   hintText: { fontSize: 11, color: COLORS.textLight, marginTop: 8, textAlign: 'center' },
   demoContainer: { marginTop: 12, alignItems: 'center', backgroundColor: '#F5F5F5', padding: 8, borderRadius: 8 },
   demoLink: { fontSize: 11, color: COLORS.primary, fontWeight: '600', marginTop: 4 },
-  submitBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.lg, paddingVertical: 16, alignItems: 'center', marginTop: 20 },
+  demoQuickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 20,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primaryBg,
+  },
+  demoQuickBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  submitBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, paddingVertical: 16, alignItems: 'center', marginTop: 20 },
   submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
   switchMode: { alignItems: 'center', marginTop: 16 },
   switchText: { fontSize: 14, color: COLORS.textSecondary },
@@ -562,7 +563,7 @@ const styles = StyleSheet.create({
   guestFeatures: { width: '100%', marginTop: 20 },
   guestFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   guestFeatureText: { fontSize: 14, color: COLORS.text },
-  guestLoginBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, borderRadius: RADIUS.lg, paddingVertical: 16, width: '100%', marginTop: 24, gap: 8 },
+  guestLoginBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, borderRadius: RADIUS.md, paddingVertical: 16, width: '100%', marginTop: 24, gap: 8 },
   guestLoginText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
   // Consumer Profile
   header: { backgroundColor: COLORS.primary, paddingTop: 48, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl, borderBottomLeftRadius: RADIUS.xxl, borderBottomRightRadius: RADIUS.xxl },
@@ -574,17 +575,7 @@ const styles = StyleSheet.create({
   roleBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start', marginTop: 4 },
   roleText: { fontSize: 10, color: COLORS.white, fontWeight: '600', marginLeft: 3 },
   editBtn: { padding: 8 },
-  coinCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, marginHorizontal: SPACING.lg, marginTop: 10, padding: SPACING.lg, ...SHADOWS.medium },
-  coinCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  coinCardLeft: { flexDirection: 'row', alignItems: 'center' },
-  coinIconWrap: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#FFF3E0', alignItems: 'center', justifyContent: 'center', marginRight: SPACING.md },
-  coinLabel: { fontSize: 12, color: COLORS.textSecondary },
-  coinAmount: { fontSize: 22, fontWeight: '700', color: COLORS.coinColor },
-  coinActions: { flexDirection: 'row', justifyContent: 'space-around', marginTop: SPACING.lg, paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.divider },
-  coinAction: { alignItems: 'center' },
-  coinActionIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  coinActionText: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '500' },
-  orderStatusCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, marginHorizontal: SPACING.lg, marginTop: SPACING.lg, padding: SPACING.lg, ...SHADOWS.small },
+  orderStatusCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.md, marginHorizontal: SPACING.lg, marginTop: SPACING.lg, padding: SPACING.lg, ...SHADOWS.small },
   orderStatusTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: SPACING.md },
   orderStatusRow: { flexDirection: 'row', justifyContent: 'space-around' },
   orderStatusItem: { alignItems: 'center' },
@@ -594,7 +585,7 @@ const styles = StyleSheet.create({
   orderStatusLabel: { fontSize: 11, color: COLORS.textSecondary },
   menuSection: { marginTop: SPACING.lg, paddingHorizontal: SPACING.lg },
   menuSectionTitle: { fontSize: 14, fontWeight: '700', color: COLORS.textSecondary, marginBottom: SPACING.sm },
-  menuCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, ...SHADOWS.small },
+  menuCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.md, ...SHADOWS.small },
   menuItem: { flexDirection: 'row', alignItems: 'center', padding: SPACING.md },
   menuItemBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.divider },
   menuIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: SPACING.md },
@@ -602,7 +593,7 @@ const styles = StyleSheet.create({
   menuRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   menuBadge: { backgroundColor: COLORS.accent, borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   menuBadgeText: { color: COLORS.white, fontSize: 10, fontWeight: '700' },
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: SPACING.lg, marginTop: SPACING.xl, backgroundColor: COLORS.white, borderRadius: RADIUS.lg, paddingVertical: SPACING.md, ...SHADOWS.small, borderWidth: 1, borderColor: '#FFCDD2' },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: SPACING.lg, marginTop: SPACING.xl, backgroundColor: COLORS.white, borderRadius: RADIUS.md, paddingVertical: SPACING.md, ...SHADOWS.small, borderWidth: 1, borderColor: '#FFCDD2' },
   logoutText: { fontSize: 14, fontWeight: '600', color: COLORS.accent, marginLeft: 8 },
   version: { textAlign: 'center', fontSize: 12, color: COLORS.textLight, marginTop: SPACING.lg },
   // Expert Dashboard
@@ -617,20 +608,18 @@ const styles = StyleSheet.create({
   statusButtons: { flexDirection: 'row', gap: 8 },
   statusBtn: { flex: 1, paddingVertical: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', backgroundColor: 'transparent' },
   statusBtnText: { fontSize: 11, color: 'white', fontWeight: '600' },
-  earningsCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, marginHorizontal: SPACING.lg, marginTop: -20, padding: SPACING.lg, ...SHADOWS.medium },
+  earningsCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.md, marginHorizontal: SPACING.lg, marginTop: -20, padding: SPACING.lg, ...SHADOWS.medium },
   earningsTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 12 },
   earningsRow: { flexDirection: 'row' },
   earningsItem: { flex: 1, alignItems: 'center' },
   earningsLabel: { fontSize: 12, color: COLORS.textSecondary },
   earningsAmount: { fontSize: 18, fontWeight: '700', color: COLORS.primaryDark, marginTop: 4 },
   earningsDivider: { width: 1, backgroundColor: COLORS.divider },
-  coinRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.divider },
-  coinText: { fontSize: 14, fontWeight: '600', color: COLORS.coinColor },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: SPACING.lg, marginTop: SPACING.lg, gap: 10 },
-  statCard: { width: '47%', borderRadius: RADIUS.lg, padding: SPACING.lg, alignItems: 'center', ...SHADOWS.small },
+  statCard: { width: '47%', borderRadius: RADIUS.md, padding: SPACING.lg, alignItems: 'center', ...SHADOWS.small },
   statNum: { fontSize: 24, fontWeight: '700', color: COLORS.text, marginTop: 6 },
   statLabel: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
-  sectionCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, marginHorizontal: SPACING.lg, marginTop: SPACING.lg, padding: SPACING.lg, ...SHADOWS.small },
+  sectionCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.md, marginHorizontal: SPACING.lg, marginTop: SPACING.lg, padding: SPACING.lg, ...SHADOWS.small },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text },
   seeAll: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },

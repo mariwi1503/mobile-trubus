@@ -1,16 +1,47 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp, Address } from '../context/AppContext';
 
+type ActiveTab = 'alamat' | 'toko';
+
+const NEARBY_STORES = [
+  {
+    id: 'store_1',
+    name: 'Trubus Menteng',
+    distance: '1.2 km',
+    address: 'Jl. HOS Cokroaminoto No. 72, Menteng',
+  },
+  {
+    id: 'store_2',
+    name: 'Trubus Depok',
+    distance: '4.8 km',
+    address: 'Jl. Margonda Raya No. 211, Kemiri Muka',
+  },
+  {
+    id: 'store_3',
+    name: 'Trubus Bintaro',
+    distance: '7.3 km',
+    address: 'Jl. Boulevard Bintaro Jaya Blok RA 11',
+  },
+];
+
 export default function AddressesScreen() {
   const router = useRouter();
   const { addresses, addAddress, removeAddress, setDefaultAddress } = useApp();
+  const [activeTab, setActiveTab] = useState<ActiveTab>('alamat');
   const [showForm, setShowForm] = useState(false);
+  const [selectedStoreId, setSelectedStoreId] = useState(NEARBY_STORES[0].id);
   const [form, setForm] = useState({
-    label: '', recipient: '', phone: '', address: '', city: '', province: '', postalCode: '',
+    label: '',
+    recipient: '',
+    phone: '',
+    address: '',
+    city: '',
+    province: '',
+    postalCode: '',
   });
 
   const handleSave = () => {
@@ -18,14 +49,25 @@ export default function AddressesScreen() {
       Alert.alert('Peringatan', 'Mohon lengkapi semua data yang diperlukan');
       return;
     }
+
     const newAddress: Address = {
       id: `addr_${Date.now()}`,
       ...form,
       isDefault: addresses.length === 0,
     };
+
     addAddress(newAddress);
-    setForm({ label: '', recipient: '', phone: '', address: '', city: '', province: '', postalCode: '' });
+    setForm({
+      label: '',
+      recipient: '',
+      phone: '',
+      address: '',
+      city: '',
+      province: '',
+      postalCode: '',
+    });
     setShowForm(false);
+    setActiveTab('alamat');
     Alert.alert('Berhasil', 'Alamat berhasil ditambahkan');
   };
 
@@ -38,93 +80,189 @@ export default function AddressesScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Alamat Pengiriman</Text>
-        <TouchableOpacity onPress={() => setShowForm(true)}>
-          <Ionicons name="add-circle-outline" size={24} color={COLORS.primary} />
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
+          <Ionicons name="arrow-back" size={20} color={COLORS.text} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: SPACING.lg, paddingBottom: 40 }}>
-        {addresses.map((addr) => (
-          <View key={addr.id} style={[styles.addressCard, addr.isDefault && styles.addressCardDefault]}>
-            <View style={styles.addressHeader}>
-              <View style={styles.labelRow}>
-                <Text style={styles.addressLabel}>{addr.label}</Text>
-                {addr.isDefault && (
-                  <View style={styles.defaultBadge}>
-                    <Text style={styles.defaultText}>Utama</Text>
-                  </View>
-                )}
-              </View>
-              <TouchableOpacity onPress={() => handleDelete(addr.id, addr.label)}>
-                <Ionicons name="trash-outline" size={18} color={COLORS.accent} />
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'alamat' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('alamat')}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="location-outline"
+            size={16}
+            color={activeTab === 'alamat' ? COLORS.white : COLORS.textSecondary}
+          />
+          <Text style={[styles.tabText, activeTab === 'alamat' && styles.tabTextActive]}>Alamat Tujuan</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'toko' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('toko')}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="storefront-outline"
+            size={16}
+            color={activeTab === 'toko' ? COLORS.white : COLORS.textSecondary}
+          />
+          <Text style={[styles.tabText, activeTab === 'toko' && styles.tabTextActive]}>Toko Terdekat</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {activeTab === 'alamat' ? (
+          <View>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Daftar alamat tujuan</Text>
+              <TouchableOpacity style={styles.addButton} onPress={() => setShowForm(true)}>
+                <Ionicons name="add" size={16} color={COLORS.primary} />
+                <Text style={styles.addButtonText}>Tambah</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.recipientName}>{addr.recipient}</Text>
-            <Text style={styles.recipientPhone}>{addr.phone}</Text>
-            <Text style={styles.addressText}>{addr.address}</Text>
-            <Text style={styles.cityText}>{addr.city}, {addr.province} {addr.postalCode}</Text>
-            {!addr.isDefault && (
-              <TouchableOpacity style={styles.setDefaultBtn} onPress={() => setDefaultAddress(addr.id)}>
-                <Text style={styles.setDefaultText}>Jadikan Alamat Utama</Text>
+
+            {addresses.map((addr) => (
+              <TouchableOpacity
+                key={addr.id}
+                style={[styles.card, addr.isDefault && styles.cardActive]}
+                onPress={() => setDefaultAddress(addr.id)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardHeaderLeft}>
+                    <Ionicons
+                      name={addr.isDefault ? 'checkmark-circle' : 'location-outline'}
+                      size={18}
+                      color={addr.isDefault ? COLORS.primary : COLORS.textSecondary}
+                    />
+                    <View>
+                      <View style={styles.addressTitleRow}>
+                        <Text style={styles.addressLabel}>{addr.label}</Text>
+                        {addr.isDefault && (
+                          <View style={styles.badge}>
+                            <Text style={styles.badgeText}>Utama</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.addressMeta}>{addr.recipient} · {addr.phone}</Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity onPress={() => handleDelete(addr.id, addr.label)} hitSlop={8}>
+                    <Ionicons name="trash-outline" size={18} color={COLORS.accent} />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.addressText}>{addr.address}</Text>
+                <Text style={styles.cityText}>{addr.city}, {addr.province} {addr.postalCode}</Text>
+
+                {!addr.isDefault && (
+                  <Text style={styles.setDefaultText}>Tap untuk jadikan alamat utama</Text>
+                )}
               </TouchableOpacity>
+            ))}
+
+            {addresses.length === 0 && (
+              <View style={styles.empty}>
+                <Ionicons name="location-outline" size={42} color={COLORS.textLight} />
+                <Text style={styles.emptyTitle}>Belum ada alamat</Text>
+                <TouchableOpacity style={styles.primaryButton} onPress={() => setShowForm(true)}>
+                  <Text style={styles.primaryButtonText}>Tambah Alamat</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
-        ))}
+        ) : (
+          <View>
+            <Text style={styles.sectionTitle}>Daftar toko terdekat</Text>
 
-        {addresses.length === 0 && (
-          <View style={styles.empty}>
-            <Ionicons name="location-outline" size={48} color={COLORS.textLight} />
-            <Text style={styles.emptyText}>Belum ada alamat</Text>
-            <TouchableOpacity style={styles.addBtn} onPress={() => setShowForm(true)}>
-              <Text style={styles.addBtnText}>Tambah Alamat</Text>
-            </TouchableOpacity>
+            {NEARBY_STORES.map((store) => {
+              const selected = selectedStoreId === store.id;
+
+              return (
+                <TouchableOpacity
+                  key={store.id}
+                  style={[styles.card, selected && styles.cardActive]}
+                  onPress={() => setSelectedStoreId(store.id)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.cardHeader}>
+                    <View style={styles.cardHeaderLeft}>
+                      <Ionicons
+                        name={selected ? 'storefront' : 'storefront-outline'}
+                        size={18}
+                        color={selected ? COLORS.primary : COLORS.textSecondary}
+                      />
+                      <View>
+                        <Text style={styles.addressLabel}>{store.name}</Text>
+                        <Text style={styles.addressMeta}>{store.distance}</Text>
+                      </View>
+                    </View>
+
+                    {selected && <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />}
+                  </View>
+
+                  <Text style={styles.addressText}>{store.address}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
       </ScrollView>
 
-      {/* Add Address Modal */}
       <Modal visible={showForm} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Tambah Alamat Baru</Text>
-              <TouchableOpacity onPress={() => setShowForm(false)}>
-                <Ionicons name="close" size={24} color={COLORS.text} />
-              </TouchableOpacity>
+          <KeyboardAvoidingView
+            style={styles.modalKeyboardWrap}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          >
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Tambah Alamat Baru</Text>
+                <TouchableOpacity onPress={() => setShowForm(false)}>
+                  <Ionicons name="close" size={24} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.formScrollContent}
+              >
+                {[
+                  { key: 'label', label: 'Label Alamat', placeholder: 'Contoh: Rumah, Kantor' },
+                  { key: 'recipient', label: 'Nama Penerima', placeholder: 'Nama lengkap penerima' },
+                  { key: 'phone', label: 'No. Telepon', placeholder: '08xxxxxxxxxx', keyboardType: 'phone-pad' },
+                  { key: 'address', label: 'Alamat Lengkap', placeholder: 'Jalan, RT/RW, Kelurahan', multiline: true },
+                  { key: 'city', label: 'Kota/Kabupaten', placeholder: 'Nama kota' },
+                  { key: 'province', label: 'Provinsi', placeholder: 'Nama provinsi' },
+                  { key: 'postalCode', label: 'Kode Pos', placeholder: 'Kode pos', keyboardType: 'number-pad' },
+                ].map((field) => (
+                  <View key={field.key} style={styles.formGroup}>
+                    <Text style={styles.formLabel}>{field.label}</Text>
+                    <TextInput
+                      style={[styles.formInput, field.multiline && styles.formInputMulti]}
+                      value={(form as Record<string, string>)[field.key]}
+                      onChangeText={(text) => setForm({ ...form, [field.key]: text })}
+                      placeholder={field.placeholder}
+                      placeholderTextColor={COLORS.textLight}
+                      multiline={field.multiline}
+                      keyboardType={(field as { keyboardType?: 'default' | 'phone-pad' | 'number-pad' }).keyboardType}
+                    />
+                  </View>
+                ))}
+
+                <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+                  <Text style={styles.saveBtnText}>Simpan Alamat</Text>
+                </TouchableOpacity>
+              </ScrollView>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {[
-                { key: 'label', label: 'Label Alamat', placeholder: 'Contoh: Rumah, Kantor' },
-                { key: 'recipient', label: 'Nama Penerima', placeholder: 'Nama lengkap penerima' },
-                { key: 'phone', label: 'No. Telepon', placeholder: '08xxxxxxxxxx', keyboardType: 'phone-pad' },
-                { key: 'address', label: 'Alamat Lengkap', placeholder: 'Jalan, RT/RW, Kelurahan', multiline: true },
-                { key: 'city', label: 'Kota/Kabupaten', placeholder: 'Nama kota' },
-                { key: 'province', label: 'Provinsi', placeholder: 'Nama provinsi' },
-                { key: 'postalCode', label: 'Kode Pos', placeholder: 'Kode pos', keyboardType: 'number-pad' },
-              ].map((field) => (
-                <View key={field.key} style={styles.formGroup}>
-                  <Text style={styles.formLabel}>{field.label}</Text>
-                  <TextInput
-                    style={[styles.formInput, field.multiline && styles.formInputMulti]}
-                    value={(form as any)[field.key]}
-                    onChangeText={(text) => setForm({ ...form, [field.key]: text })}
-                    placeholder={field.placeholder}
-                    placeholderTextColor={COLORS.textLight}
-                    multiline={field.multiline}
-                    keyboardType={(field as any).keyboardType}
-                  />
-                </View>
-              ))}
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <Text style={styles.saveBtnText}>Simpan Alamat</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>
@@ -132,55 +270,239 @@ export default function AddressesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    backgroundColor: COLORS.white, paddingTop: 48, paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderBottomWidth: 1, borderBottomColor: COLORS.divider,
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
   },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: COLORS.text },
-  addressCard: {
-    backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
-    padding: SPACING.lg, marginBottom: SPACING.md, ...SHADOWS.small,
-    borderWidth: 1, borderColor: COLORS.border,
+  topBar: {
+    paddingTop: 52,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.sm,
+    backgroundColor: COLORS.white,
   },
-  addressCardDefault: { borderColor: COLORS.primary },
-  addressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  addressLabel: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  defaultBadge: { backgroundColor: COLORS.primaryBg, borderRadius: RADIUS.xs, paddingHorizontal: 6, paddingVertical: 2 },
-  defaultText: { fontSize: 10, color: COLORS.primary, fontWeight: '600' },
-  recipientName: { fontSize: 14, fontWeight: '600', color: COLORS.text },
-  recipientPhone: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
-  addressText: { fontSize: 13, color: COLORS.textSecondary, marginTop: 6, lineHeight: 18 },
-  cityText: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
-  setDefaultBtn: { marginTop: 10, alignSelf: 'flex-start' },
-  setDefaultText: { fontSize: 12, color: COLORS.primary, fontWeight: '600' },
-  empty: { alignItems: 'center', paddingTop: 60 },
-  emptyText: { fontSize: 16, color: COLORS.textSecondary, marginTop: 12 },
-  addBtn: {
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.md,
-    paddingHorizontal: 24, paddingVertical: 12, marginTop: 16,
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.background,
   },
-  addBtnText: { color: COLORS.white, fontSize: 14, fontWeight: '700' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.md,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.md,
+    paddingVertical: 12,
+  },
+  tabButtonActive: {
+    backgroundColor: COLORS.primary,
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  tabTextActive: {
+    color: COLORS.white,
+  },
+  content: {
+    padding: SPACING.lg,
+    paddingBottom: 36,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: COLORS.primaryBg,
+    borderRadius: RADIUS.md,
+  },
+  addButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  card: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.small,
+  },
+  cardActive: {
+    borderColor: COLORS.primary,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  cardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    flex: 1,
+    paddingRight: 8,
+  },
+  addressTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  addressLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  badge: {
+    backgroundColor: COLORS.primaryBg,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  addressMeta: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  addressText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
+  cityText: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    marginTop: 4,
+  },
+  setDefaultText: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  empty: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  primaryButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  primaryButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalKeyboardWrap: {
+    justifyContent: 'flex-end',
+  },
   modalContent: {
-    backgroundColor: COLORS.white, borderTopLeftRadius: RADIUS.xxl, borderTopRightRadius: RADIUS.xxl,
-    padding: SPACING.xl, maxHeight: '85%',
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: RADIUS.xxl,
+    borderTopRightRadius: RADIUS.xxl,
+    padding: SPACING.xl,
+    maxHeight: '85%',
   },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.lg },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  formGroup: { marginBottom: SPACING.md },
-  formLabel: { fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6 },
+  formScrollContent: {
+    paddingBottom: SPACING.xl,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  formGroup: {
+    marginBottom: SPACING.md,
+  },
+  formLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 6,
+  },
   formInput: {
-    backgroundColor: COLORS.background, borderRadius: RADIUS.sm,
-    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm + 2,
-    fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm + 2,
+    fontSize: 14,
+    color: COLORS.text,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  formInputMulti: { height: 80, textAlignVertical: 'top' },
+  formInputMulti: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
   saveBtn: {
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.lg,
-    paddingVertical: 16, alignItems: 'center', marginTop: SPACING.md, marginBottom: SPACING.xl,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xl,
   },
-  saveBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
+  saveBtnText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '700',
+  },
 });

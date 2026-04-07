@@ -112,6 +112,32 @@ export default function OrdersScreen() {
                   </View>
                 )}
 
+                <View style={styles.metaSection}>
+                  <View style={styles.metaRow}>
+                    <Ionicons
+                      name={item.fulfillmentMethod === 'pickup' ? 'storefront-outline' : 'car-outline'}
+                      size={14}
+                      color={COLORS.primary}
+                    />
+                    <Text style={styles.metaText}>
+                      {item.fulfillmentMethod === 'pickup' ? 'Jemput ke Toko' : 'Diantar'}
+                    </Text>
+                  </View>
+                  {item.fulfillmentMethod === 'pickup' ? (
+                    <View style={styles.metaRow}>
+                      <Ionicons name="location-outline" size={14} color={COLORS.textSecondary} />
+                      <Text style={styles.metaText} numberOfLines={1}>{item.store || 'Toko belum dipilih'}</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.metaRow}>
+                      <Ionicons name="location-outline" size={14} color={COLORS.textSecondary} />
+                      <Text style={styles.metaText} numberOfLines={1}>
+                        {item.address ? `${item.address.label} - ${item.address.city}` : 'Alamat belum dipilih'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
                 <View style={styles.orderFooter}>
                   <View>
                     <Text style={styles.totalLabel}>Total Belanja</Text>
@@ -207,7 +233,7 @@ const styles = StyleSheet.create({
   },
   orderCard: {
     backgroundColor: COLORS.white,
-    borderRadius: RADIUS.lg,
+    borderRadius: RADIUS.md,
     padding: SPACING.lg,
     marginTop: SPACING.md,
     ...SHADOWS.small,
@@ -256,6 +282,23 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: '600',
     marginTop: 2
+  },
+  metaSection: {
+    marginTop: SPACING.md,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.divider,
+    gap: 6,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metaText: {
+    flex: 1,
+    fontSize: 12,
+    color: COLORS.textSecondary,
   },
   orderFooter: {
     flexDirection: 'row',

@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: SPACING.xl, marginTop: -20,
-    backgroundColor: COLORS.white, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl,
+    backgroundColor: COLORS.white, borderTopLeftRadius: RADIUS.md, borderTopRightRadius: RADIUS.md,
   },
   categoryBadge: {
     backgroundColor: COLORS.primaryBg, borderRadius: RADIUS.full,

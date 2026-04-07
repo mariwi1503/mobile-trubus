@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
+import { COLORS, RADIUS, SHADOWS, SPACING, CARD_WIDTH } from '../constants/theme';
 import { Product } from '../data/products';
 import { useApp } from '../context/AppContext';
 
@@ -19,6 +19,7 @@ export default function ProductCard({ product, compact, fullWidth }: ProductCard
   const { addToCart, wishlist, toggleWishlist } = useApp();
   const isWished = wishlist.includes(product.id);
   const discount = product.originalPrice ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
+  const imageSource = typeof product.image === 'string' ? { uri: product.image } : product.image;
 
   const handleAddToCart = (e: any) => {
     e.stopPropagation?.();
@@ -41,7 +42,7 @@ export default function ProductCard({ product, compact, fullWidth }: ProductCard
       activeOpacity={0.7}
     >
       <View style={styles.imageContainer}>
-        <Image source={{ uri: product.image }} style={styles.image} />
+        <Image source={imageSource} style={styles.image} />
         {discount > 0 && (
           <View style={styles.discountBadge}>
             <Text style={styles.discountText}>{discount}%</Text>
@@ -78,16 +79,16 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.md,
     ...SHADOWS.small,
-    width: 165,
+    width: CARD_WIDTH,
     marginRight: SPACING.md,
     marginBottom: SPACING.md,
     overflow: 'hidden',
   },
-  cardCompact: { width: 150 },
+  cardCompact: { width: CARD_WIDTH - 20 },
   cardFullWidth: { width: '100%', marginRight: 0 },
 
   imageContainer: { position: 'relative' },
-  image: { width: '100%', height: 140, backgroundColor: '#f0f0f0' },
+  image: { width: '100%', height: 110, backgroundColor: '#f0f0f0' },
   discountBadge: {
     position: 'absolute', top: 8, left: 8,
     backgroundColor: COLORS.accent, borderRadius: RADIUS.xs,

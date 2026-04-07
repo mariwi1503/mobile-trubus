@@ -24,7 +24,7 @@ const Storage = {
 const memoryStorage: Record<string, string> = {};
 
 export interface CartItem {
-  productId: string; name: string; price: number; image: string;
+  productId: string; name: string; price: number; image: any;
   quantity: number; weight: number; store: string;
 }
 export interface Address {
@@ -35,18 +35,21 @@ export interface Order {
   id: string; type: 'product' | 'consultation'; items?: CartItem[];
   expertId?: string; expertName?: string; consultationDate?: string; consultationTime?: string;
   totalAmount: number; shippingCost?: number; courier?: string; address?: Address;
-  status: 'pending_payment' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'completed' | 'cancelled';
+  fulfillmentMethod?: 'delivery' | 'pickup';
+  coinRedemptionCost?: number;
+  status: 'draft' | 'pending_payment' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'completed' | 'cancelled';
   paymentMethod?: string; createdAt: string; store?: string;
   // For expert: client info
   clientName?: string; clientPhone?: string; clientAvatar?: string;
 }
 export interface Notification {
   id: string; title: string; message: string;
-  type: 'order' | 'consultation' | 'promo' | 'info'; read: boolean; createdAt: string;
+  type: 'order' | 'consultation' | 'promo' | 'info' | 'article'; read: boolean; createdAt: string;
 }
 export interface UserProfile {
   name: string; email: string; phone: string; avatar: string;
-  role: 'consumer' | 'expert'; trubusCoins: number;
+  role: 'consumer' | 'expert';
+  trubusCoins: number; // For loyalty points
   specialization?: string; experience?: number; fee?: number;
   status?: 'online' | 'busy' | 'offline'; // Added status
 }
@@ -72,6 +75,8 @@ interface AppContextType {
   // Onboarding
   isOnboarded: boolean;
   setIsOnboarded: (v: boolean) => void;
+  hasAcceptedTerms: boolean;
+  setHasAcceptedTerms: (v: boolean) => void;
   // Cart
   cart: CartItem[];
   addToCart: (item: CartItem) => void;
@@ -90,6 +95,7 @@ interface AppContextType {
   addOrder: (order: Order) => void;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
   updateOrderPayment: (orderId: string, method: string) => void;
+  getDraftOrder: () => Order | undefined;
   // Notifications
   notifications: Notification[];
   addNotification: (notification: Notification) => void;
@@ -101,12 +107,10 @@ interface AppContextType {
   toggleWishlist: (productId: string) => void;
   // Transactions
   transactions: Transaction[];
-  topUp: (amount: number, method: string) => void;
-  transfer: (recipient: string, amount: number) => { success: boolean; message: string };
 }
 
 const guestUser: UserProfile = {
-  name: 'Tamu', email: '', phone: '', avatar: '', role: 'consumer', trubusCoins: 0,
+  name: 'Tamu', email: '', phone: '', avatar: '', role: 'consumer', trubusCoins: 0
 };
 
 const defaultAddresses: Address[] = [
@@ -124,16 +128,24 @@ const defaultAddresses: Address[] = [
 
 const defaultNotifications: Notification[] = [
   {
-    id: 'n1', title: 'Selamat Datang!', message: 'Selamat datang di Halo Trubus. Nikmati konsultasi pertama GRATIS!',
+    id: 'n1', title: 'Pesanan Dikonfirmasi', message: 'Pesanan #ORD-1029 berhasil dikonfirmasi dan sedang dikemas.',
+    type: 'order', read: false, createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString() // 30 mins ago
+  },
+  {
+    id: 'n2', title: 'Selamat Datang!', message: 'Selamat datang di Halo Trubus. Nikmati konsultasi pertama GRATIS!',
     type: 'promo', read: false, createdAt: '2026-02-11T08:00:00Z'
   },
   {
-    id: 'n2', title: 'Promo Pupuk Organik', message: 'Diskon 20% untuk semua pupuk organik. Berlaku hingga akhir bulan!',
+    id: 'n3', title: 'Promo Pupuk Organik', message: 'Diskon 20% untuk semua pupuk organik. Berlaku hingga akhir bulan!',
     type: 'promo', read: false, createdAt: '2026-02-10T10:00:00Z'
   },
   {
-    id: 'n3', title: 'Tips Berkebun', message: 'Musim hujan tiba! Baca tips melindungi tanaman dari genangan air.',
-    type: 'info', read: true, createdAt: '2026-02-09T14:00:00Z'
+    id: 'n4', title: 'Artikel: Tips Berkebun', message: 'Musim hujan tiba! Baca tips melindungi tanaman dari genangan air.',
+    type: 'article', read: true, createdAt: '2026-02-09T14:00:00Z'
+  },
+  {
+    id: 'n5', title: 'Update Sistem', message: 'Pembaruan aplikasi ke versi 2.0 memberikan pengalaman lebih baik.',
+    type: 'info', read: true, createdAt: '2026-02-08T10:00:00Z'
   },
 ];
 
@@ -148,17 +160,17 @@ const seedUsers: RegisteredUser[] = [
   {
     name: 'Budi Santoso', email: 'budi@email.com', phone: '081234567890', password: '123456',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
-    role: 'consumer', trubusCoins: 250000
+    role: 'consumer', trubusCoins: 2500
   },
   {
     name: 'Dr. Ir. Bambang Suryadi', email: 'bambang@email.com', phone: '081298765432', password: '123456',
     avatar: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&h=200&fit=crop&crop=face',
-    role: 'expert', trubusCoins: 1500000, specialization: 'Ahli Hama & Penyakit Tanaman', experience: 15, fee: 75000, status: 'online'
+    role: 'expert', specialization: 'Ahli Hama & Penyakit Tanaman', experience: 15, fee: 75000, status: 'online', trubusCoins: 0
   },
   {
     name: 'Dr. Rina Wulandari', email: 'rina@email.com', phone: '081345678901', password: '123456',
     avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&h=200&fit=crop&crop=face',
-    role: 'expert', trubusCoins: 980000, specialization: 'Ahli Hidroponik & Urban Farming', experience: 10, fee: 85000, status: 'busy'
+    role: 'expert', specialization: 'Ahli Hidroponik & Urban Farming', experience: 10, fee: 85000, status: 'busy', trubusCoins: 0
   },
 ];
 
@@ -170,6 +182,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [user, setUserState] = useState<UserProfile>(guestUser);
   const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>(seedUsers);
   const [isOnboarded, setIsOnboarded] = useState(false);
+  const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [addresses, setAddresses] = useState<Address[]>(defaultAddresses);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -182,6 +195,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const storedOnboarded = await Storage.getItem('onboarded');
         if (storedOnboarded === 'true') setIsOnboarded(true);
+        const storedAcceptedTerms = await Storage.getItem('acceptedTerms');
+        if (storedAcceptedTerms === 'true') setHasAcceptedTerms(true);
         const storedCart = await Storage.getItem('cart');
         if (storedCart) setCart(JSON.parse(storedCart));
         const storedOrders = await Storage.getItem('orders');
@@ -232,7 +247,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       avatar: data.role === 'expert'
         ? 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&h=200&fit=crop&crop=face'
         : 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-      trubusCoins: 50000, // Welcome bonus
     };
     const updated = [...registeredUsers, newUser];
     setRegisteredUsers(updated);
@@ -321,6 +335,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateOrderPayment = useCallback((orderId: string, method: string) => {
     setOrders(prev => { const o = prev.map(x => x.id === orderId ? { ...x, paymentMethod: method, status: 'paid' as const } : x); Storage.setItem('orders', JSON.stringify(o)); return o; });
   }, []);
+  const getDraftOrder = useCallback(() => {
+    return orders.find(o => o.status === 'draft');
+  }, [orders]);
 
   // Notifications
   const addNotification = useCallback((n: Notification) => {
@@ -342,49 +359,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, []);
 
-  // Transactions
-  const topUp = useCallback((amount: number, method: string) => {
-    const newTx: Transaction = {
-      id: `tx_${Date.now()}`, type: 'topup', amount, date: new Date().toISOString(),
-      description: `Top Up via ${method}`, status: 'success',
-    };
-    setTransactions(prev => { const t = [newTx, ...prev]; Storage.setItem('transactions', JSON.stringify(t)); return t; });
-    setUserState(prev => {
-      const updated = { ...prev, trubusCoins: prev.trubusCoins + amount };
-      if (isLoggedIn) Storage.setItem('session', JSON.stringify(updated));
-      return updated;
-    });
-  }, [isLoggedIn]);
-
-  const transfer = useCallback((recipient: string, amount: number): { success: boolean; message: string } => {
-    if (user.trubusCoins < amount) return { success: false, message: 'Saldo tidak mencukupi' };
-
-    // In a real app, we would validate recipient here
-    const newTx: Transaction = {
-      id: `tx_${Date.now()}`, type: 'transfer_out', amount, date: new Date().toISOString(),
-      description: `Transfer ke ${recipient}`, status: 'success',
-    };
-    setTransactions(prev => { const t = [newTx, ...prev]; Storage.setItem('transactions', JSON.stringify(t)); return t; });
-    setUserState(prev => {
-      const updated = { ...prev, trubusCoins: prev.trubusCoins - amount };
-      if (isLoggedIn) Storage.setItem('session', JSON.stringify(updated));
-      return updated;
-    });
-    return { success: true, message: 'Transfer berhasil' };
-  }, [user.trubusCoins, isLoggedIn]);
-
   const handleSetOnboarded = useCallback((v: boolean) => { setIsOnboarded(v); Storage.setItem('onboarded', v ? 'true' : 'false'); }, []);
+  const handleSetHasAcceptedTerms = useCallback((v: boolean) => { setHasAcceptedTerms(v); Storage.setItem('acceptedTerms', v ? 'true' : 'false'); }, []);
 
   return (
     <AppContext.Provider value={{
       isLoggedIn, user, setUser, updateStatus, login, register, logout, registeredUsers,
-      isOnboarded, setIsOnboarded: handleSetOnboarded,
+      isOnboarded, setIsOnboarded: handleSetOnboarded, hasAcceptedTerms, setHasAcceptedTerms: handleSetHasAcceptedTerms,
       cart, addToCart, removeFromCart, updateCartQuantity, clearCart, getCartTotal, getCartCount,
       addresses, addAddress, removeAddress, setDefaultAddress,
-      orders, addOrder, updateOrderStatus, updateOrderPayment,
+      orders, addOrder, updateOrderStatus, updateOrderPayment, getDraftOrder,
       notifications, addNotification, markNotificationRead, markAllNotificationsRead, getUnreadCount,
       wishlist, toggleWishlist,
-      transactions, topUp, transfer,
+      transactions,
     }}>
       {children}
     </AppContext.Provider>

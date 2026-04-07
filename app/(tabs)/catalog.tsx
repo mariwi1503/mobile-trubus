@@ -28,7 +28,13 @@ export default function CatalogScreen() {
 
   const filteredProducts = useMemo(() => {
     let result = [...PRODUCTS];
-    if (selectedCategory !== 'all') {
+    const featuredRealProducts = PRODUCTS.filter((p) => p.id.startsWith('rp'));
+    
+    if (selectedCategory === 'flash_sale') {
+      result = [...featuredRealProducts].filter(p => p.originalPrice).sort((a, b) => (b.originalPrice! - b.price) - (a.originalPrice! - a.price));
+    } else if (selectedCategory === 'promo') {
+      result = featuredRealProducts.filter(p => p.originalPrice);
+    } else if (selectedCategory !== 'all') {
       result = result.filter(p => p.category === selectedCategory);
     }
     if (search.trim()) {
@@ -75,15 +81,23 @@ export default function CatalogScreen() {
           {PRODUCT_CATEGORIES.map((cat) => (
             <TouchableOpacity
               key={cat.id}
-              style={[styles.catChip, selectedCategory === cat.id && styles.catChipActive]}
+              style={[
+                styles.catChip,
+                { backgroundColor: cat.bg, borderColor: cat.color },
+                selectedCategory === cat.id && { backgroundColor: cat.color }
+              ]}
               onPress={() => setSelectedCategory(cat.id)}
             >
               <Ionicons
                 name={cat.icon as any}
                 size={16}
-                color={selectedCategory === cat.id ? COLORS.white : COLORS.primary}
+                color={selectedCategory === cat.id ? COLORS.white : cat.color}
               />
-              <Text style={[styles.catChipText, selectedCategory === cat.id && styles.catChipTextActive]}>
+              <Text style={[
+                styles.catChipText,
+                { color: cat.color },
+                selectedCategory === cat.id && { color: '#FFFFFF' }
+              ]}>
                 {cat.name}
               </Text>
             </TouchableOpacity>
@@ -106,7 +120,8 @@ export default function CatalogScreen() {
         <FlatList
           data={filteredProducts}
           keyExtractor={(item) => item.id}
-          numColumns={2}
+          key={'3cols'}
+          numColumns={3}
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.columnWrapper}
           showsVerticalScrollIndicator={false}
@@ -264,11 +279,12 @@ const styles = StyleSheet.create({
     paddingBottom: 40
   },
   columnWrapper: {
-    justifyContent: 'space-between'
+    gap: SPACING.sm,
   },
   cardWrapper: {
-    width: '48%',
-    marginBottom: 5
+    flex: 1,
+    maxWidth: '31.5%',
+    marginBottom: SPACING.sm
   },
 
   // DROPDOWN OVERLAY
