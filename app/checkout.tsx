@@ -33,33 +33,15 @@ const STORES = [
   { id: 's4', name: 'Trubus Store Yogyakarta', city: 'Yogyakarta', type: 'Cabang' },
 ];
 
-const FULFILLMENT_OPTIONS = [
-  {
-    id: 'delivery',
-    title: 'Dikirim',
-    description: 'Pesanan dikirim ke alamat tujuan dengan kurir.',
-    icon: 'car-outline',
-  },
-  {
-    id: 'pickup',
-    title: 'Jemput ke Toko',
-    description: 'Ambil sendiri di toko Trubus yang dipilih.',
-    icon: 'storefront-outline',
-  },
-] as const;
-
 export default function CheckoutScreen() {
   const router = useRouter();
   const { rewardProductId, coinCost } = useLocalSearchParams<{ rewardProductId?: string; coinCost?: string }>();
   const { cart, addresses, getCartTotal, addOrder, clearCart, user, setUser } = useApp();
   const { showAlert } = useAlert();
-  const [fulfillmentMethod, setFulfillmentMethod] = useState<'delivery' | 'pickup'>('delivery');
   const [selectedAddressId, setSelectedAddressId] = useState(addresses.find(a => a.isDefault)?.id || addresses[0]?.id || '');
   const [selectedCourier, setSelectedCourier] = useState('');
-  const [selectedStore, setSelectedStore] = useState(STORES[0].id);
   const [showAddresses, setShowAddresses] = useState(false);
   const [showCouriers, setShowCouriers] = useState(false);
-  const [showStores, setShowStores] = useState(false);
   const insets = useSafeAreaInsets();
   const rewardProduct = rewardProductId ? COIN_REWARDS.find((product) => product.id === rewardProductId) : undefined;
   const rewardCoinCost = Number(coinCost || 0);
@@ -78,10 +60,9 @@ export default function CheckoutScreen() {
 
   const selectedAddress = addresses.find(a => a.id === selectedAddressId);
   const courier = COURIERS.find(c => c.id === selectedCourier);
-  const store = STORES.find(s => s.id === selectedStore);
+  const store = STORES[0];
   const subtotal = isRewardCheckout ? 0 : getCartTotal();
-  const isDelivery = fulfillmentMethod === 'delivery';
-  const shippingCost = isDelivery ? courier?.cost || 0 : 0;
+  const shippingCost = courier?.cost || 0;
   const total = subtotal + shippingCost;
 
   const totalWeight = useMemo(
@@ -95,16 +76,12 @@ export default function CheckoutScreen() {
       return;
     }
 
-    if (isDelivery && !selectedAddress) {
+    if (!selectedAddress) {
       showAlert('Peringatan', 'Pilih alamat pengiriman');
       return;
     }
-    if (isDelivery && !selectedCourier) {
+    if (!selectedCourier) {
       showAlert('Peringatan', 'Pilih jasa kurir');
-      return;
-    }
-    if (!isDelivery && !store) {
-      showAlert('Peringatan', 'Pilih toko untuk penjemputan');
       return;
     }
 
@@ -115,10 +92,10 @@ export default function CheckoutScreen() {
       items: [...checkoutItems],
       totalAmount: total,
       shippingCost,
-      fulfillmentMethod,
+      fulfillmentMethod: 'delivery' as const,
       coinRedemptionCost: isRewardCheckout ? rewardCoinCost : undefined,
-      courier: isDelivery ? courier?.name || '' : 'Pickup di toko',
-      address: isDelivery ? selectedAddress : undefined,
+      courier: courier?.name || '',
+      address: selectedAddress,
       store: store?.name || '',
       status: isRewardCheckout && total === 0 ? 'paid' as const : 'draft' as const,
       createdAt: new Date().toISOString(),
@@ -181,197 +158,103 @@ export default function CheckoutScreen() {
           </View>
         )}
 
+        <TouchableOpacity style={styles.card} onPress={() => setShowAddresses(!showAddresses)}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="location" size={20} color={COLORS.primary} />
+            <Text style={styles.cardTitle}>Alamat Pengiriman</Text>
+            <Ionicons name={showAddresses ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textLight} />
+          </View>
+          {selectedAddress ? (
+            <View style={styles.addressPreview}>
+              <Text style={styles.addressLabel}>{selectedAddress.label}</Text>
+              <Text style={styles.addressName}>{selectedAddress.recipient} - {selectedAddress.phone}</Text>
+              <Text style={styles.addressText}>{selectedAddress.address}, {selectedAddress.city}</Text>
+            </View>
+          ) : (
+            <Text style={styles.selectText}>Pilih alamat pengiriman</Text>
+          )}
+        </TouchableOpacity>
+
+        {showAddresses && (
+          <View style={styles.optionList}>
+            {addresses.map((addr) => (
+              <TouchableOpacity
+                key={addr.id}
+                style={[styles.optionItem, selectedAddressId === addr.id && styles.optionItemActive]}
+                onPress={() => { setSelectedAddressId(addr.id); setShowAddresses(false); }}
+              >
+                <View style={styles.optionRadio}>
+                  {selectedAddressId === addr.id && <View style={styles.optionRadioInner} />}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.optionLabel}>{addr.label}</Text>
+                  <Text style={styles.optionText}>{addr.address}, {addr.city}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.addAddressBtn} onPress={() => router.push('/addresses')}>
+              <Ionicons name="add-circle-outline" size={18} color={COLORS.primary} />
+              <Text style={styles.addAddressText}>Tambah Alamat Baru</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="git-compare-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.cardTitle}>Metode Penerimaan</Text>
+            <Ionicons name="storefront" size={20} color={COLORS.accentOrange} />
+            <Text style={styles.cardTitle}>Toko Pengirim</Text>
+            <View style={[styles.readonlyBadge, store?.type === 'Pusat' && styles.readonlyBadgePusat]}>
+              <Text style={[styles.readonlyBadgeText, store?.type === 'Pusat' && styles.readonlyBadgeTextPusat]}>
+                {store?.type || 'Resmi'}
+              </Text>
+            </View>
           </View>
-          <View style={styles.fulfillmentSwitch}>
-            {FULFILLMENT_OPTIONS.map((option) => {
-              const active = fulfillmentMethod === option.id;
-
-              return (
-                <TouchableOpacity
-                  key={option.id}
-                  style={[styles.fulfillmentTab, active && styles.fulfillmentTabActive]}
-                  onPress={() => setFulfillmentMethod(option.id)}
-                  activeOpacity={0.85}
-                >
-                  <View style={[styles.fulfillmentTabIcon, active && styles.fulfillmentTabIconActive]}>
-                    <Ionicons name={option.icon} size={18} color={active ? COLORS.white : COLORS.primary} />
-                  </View>
-                  <Text style={[styles.fulfillmentTabTitle, active && styles.fulfillmentTabTitleActive]}>{option.title}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          <Text style={styles.fulfillmentHelperText}>
-            {isDelivery
-              ? 'Pesanan akan dikirim ke alamat tujuan yang Anda pilih.'
-              : 'Pesanan diambil sendiri di toko Trubus yang Anda tentukan.'}
-          </Text>
+          {store && (
+            <View style={styles.addressPreview}>
+              <Text style={styles.addressName}>{store.name}</Text>
+              <Text style={styles.addressText}>{store.city}</Text>
+            </View>
+          )}
         </View>
 
-        {isDelivery ? (
-          <>
-            <TouchableOpacity style={styles.card} onPress={() => setShowAddresses(!showAddresses)}>
-              <View style={styles.cardHeader}>
-                <Ionicons name="location" size={20} color={COLORS.primary} />
-                <Text style={styles.cardTitle}>Alamat Pengiriman</Text>
-                <Ionicons name={showAddresses ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textLight} />
-              </View>
-              {selectedAddress ? (
-                <View style={styles.addressPreview}>
-                  <Text style={styles.addressLabel}>{selectedAddress.label}</Text>
-                  <Text style={styles.addressName}>{selectedAddress.recipient} - {selectedAddress.phone}</Text>
-                  <Text style={styles.addressText}>{selectedAddress.address}, {selectedAddress.city}</Text>
-                </View>
-              ) : (
-                <Text style={styles.selectText}>Pilih alamat pengiriman</Text>
-              )}
-            </TouchableOpacity>
-
-            {showAddresses && (
-              <View style={styles.optionList}>
-                {addresses.map((addr) => (
-                  <TouchableOpacity
-                    key={addr.id}
-                    style={[styles.optionItem, selectedAddressId === addr.id && styles.optionItemActive]}
-                    onPress={() => { setSelectedAddressId(addr.id); setShowAddresses(false); }}
-                  >
-                    <View style={styles.optionRadio}>
-                      {selectedAddressId === addr.id && <View style={styles.optionRadioInner} />}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.optionLabel}>{addr.label}</Text>
-                      <Text style={styles.optionText}>{addr.address}, {addr.city}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-                <TouchableOpacity style={styles.addAddressBtn} onPress={() => router.push('/addresses')}>
-                  <Ionicons name="add-circle-outline" size={18} color={COLORS.primary} />
-                  <Text style={styles.addAddressText}>Tambah Alamat Baru</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Ionicons name="storefront" size={20} color={COLORS.accentOrange} />
-                <Text style={styles.cardTitle}>Toko Pengirim</Text>
-                <View style={[styles.readonlyBadge, store?.type === 'Pusat' && styles.readonlyBadgePusat]}>
-                  <Text style={[styles.readonlyBadgeText, store?.type === 'Pusat' && styles.readonlyBadgeTextPusat]}>
-                    {store?.type || 'Resmi'}
-                  </Text>
-                </View>
-              </View>
-              {store && (
-                <View style={styles.addressPreview}>
-                  <Text style={styles.addressName}>{store.name}</Text>
-                  <Text style={styles.addressText}>{store.city}</Text>
-                </View>
-              )}
+        <TouchableOpacity style={styles.card} onPress={() => setShowCouriers(!showCouriers)}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="car" size={20} color={COLORS.info} />
+            <Text style={styles.cardTitle}>Jasa Pengiriman</Text>
+            <Ionicons name={showCouriers ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textLight} />
+          </View>
+          {courier ? (
+            <View style={styles.addressPreview}>
+              <Text style={styles.addressName}>{courier.name}</Text>
+              <Text style={styles.addressText}>Estimasi: {courier.est} | Rp {courier.cost.toLocaleString('id-ID')}</Text>
             </View>
+          ) : (
+            <Text style={styles.selectText}>Pilih jasa pengiriman</Text>
+          )}
+        </TouchableOpacity>
 
-            <TouchableOpacity style={styles.card} onPress={() => setShowCouriers(!showCouriers)}>
-              <View style={styles.cardHeader}>
-                <Ionicons name="car" size={20} color={COLORS.info} />
-                <Text style={styles.cardTitle}>Jasa Pengiriman</Text>
-                <Ionicons name={showCouriers ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textLight} />
-              </View>
-              {courier ? (
-                <View style={styles.addressPreview}>
-                  <Text style={styles.addressName}>{courier.name}</Text>
-                  <Text style={styles.addressText}>Estimasi: {courier.est} | Rp {courier.cost.toLocaleString('id-ID')}</Text>
+        {showCouriers && (
+          <View style={styles.optionList}>
+            {COURIERS.map((c) => (
+              <TouchableOpacity
+                key={c.id}
+                style={[styles.optionItem, selectedCourier === c.id && styles.optionItemActive]}
+                onPress={() => { setSelectedCourier(c.id); setShowCouriers(false); }}
+              >
+                <View style={styles.optionRadio}>
+                  {selectedCourier === c.id && <View style={styles.optionRadioInner} />}
                 </View>
-              ) : (
-                <Text style={styles.selectText}>Pilih jasa pengiriman</Text>
-              )}
-            </TouchableOpacity>
-
-            {showCouriers && (
-              <View style={styles.optionList}>
-                {COURIERS.map((c) => (
-                  <TouchableOpacity
-                    key={c.id}
-                    style={[styles.optionItem, selectedCourier === c.id && styles.optionItemActive]}
-                    onPress={() => { setSelectedCourier(c.id); setShowCouriers(false); }}
-                  >
-                    <View style={styles.optionRadio}>
-                      {selectedCourier === c.id && <View style={styles.optionRadioInner} />}
-                    </View>
-                    {COURIER_LOGOS[c.id] && (
-                      <Image source={COURIER_LOGOS[c.id]} style={styles.courierLogo} resizeMode="contain" />
-                    )}
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.optionLabel}>{c.name}</Text>
-                      <Text style={styles.optionText}>Estimasi: {c.est}</Text>
-                    </View>
-                    <Text style={styles.courierCost}>Rp {c.cost.toLocaleString('id-ID')}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </>
-        ) : (
-          <>
-            <TouchableOpacity style={styles.card} onPress={() => setShowStores(!showStores)}>
-              <View style={styles.cardHeader}>
-                <Ionicons name="storefront" size={20} color={COLORS.accentOrange} />
-                <Text style={styles.cardTitle}>Toko Penjemputan</Text>
-                <Ionicons name={showStores ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textLight} />
-              </View>
-              {store ? (
-                <View style={styles.addressPreview}>
-                  <View style={styles.storeMetaRow}>
-                    <Text style={styles.addressName}>{store.name}</Text>
-                    <View style={[styles.readonlyBadge, store.type === 'Pusat' && styles.readonlyBadgePusat]}>
-                      <Text style={[styles.readonlyBadgeText, store.type === 'Pusat' && styles.readonlyBadgeTextPusat]}>
-                        {store.type}
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={styles.addressText}>{store.city}</Text>
-                  <Text style={styles.pickupHint}>Datang ke toko ini setelah pembayaran terverifikasi.</Text>
+                {COURIER_LOGOS[c.id] && (
+                  <Image source={COURIER_LOGOS[c.id]} style={styles.courierLogo} resizeMode="contain" />
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.optionLabel}>{c.name}</Text>
+                  <Text style={styles.optionText}>Estimasi: {c.est}</Text>
                 </View>
-              ) : (
-                <Text style={styles.selectText}>Pilih toko penjemputan</Text>
-              )}
-            </TouchableOpacity>
-
-            {showStores && (
-              <View style={styles.optionList}>
-                {STORES.map((pickupStore) => (
-                  <TouchableOpacity
-                    key={pickupStore.id}
-                    style={[styles.optionItem, selectedStore === pickupStore.id && styles.optionItemActive]}
-                    onPress={() => { setSelectedStore(pickupStore.id); setShowStores(false); }}
-                  >
-                    <View style={styles.optionRadio}>
-                      {selectedStore === pickupStore.id && <View style={styles.optionRadioInner} />}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.optionLabel}>{pickupStore.name}</Text>
-                      <Text style={styles.optionText}>{pickupStore.city}</Text>
-                    </View>
-                    <View style={[styles.readonlyBadge, pickupStore.type === 'Pusat' && styles.readonlyBadgePusat]}>
-                      <Text style={[styles.readonlyBadgeText, pickupStore.type === 'Pusat' && styles.readonlyBadgeTextPusat]}>
-                        {pickupStore.type}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            <View style={styles.flowCard}>
-              <Text style={styles.flowTitle}>Flow Jemput ke Toko</Text>
-              <Text style={styles.flowStep}>1. Pilih toko pickup yang paling nyaman.</Text>
-              <Text style={styles.flowStep}>2. Lanjut pembayaran untuk mengunci pesanan.</Text>
-              <Text style={styles.flowStep}>3. Setelah terverifikasi, pesanan disiapkan di toko.</Text>
-              <Text style={styles.flowStep}>4. Datang ke toko dan tunjukkan ID pesanan saat mengambil barang.</Text>
-            </View>
-          </>
+                <Text style={styles.courierCost}>Rp {c.cost.toLocaleString('id-ID')}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         )}
 
         {/* Order Items */}
@@ -403,12 +286,8 @@ export default function CheckoutScreen() {
             </View>
           )}
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>{isDelivery ? 'Ongkos Kirim' : 'Biaya Pickup'}</Text>
+            <Text style={styles.summaryLabel}>Ongkos Kirim</Text>
             <Text style={styles.summaryValue}>{shippingCost > 0 ? `Rp ${shippingCost.toLocaleString('id-ID')}` : 'Gratis'}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Metode Penerimaan</Text>
-            <Text style={styles.summaryValue}>{isDelivery ? 'Diantar' : 'Jemput ke Toko'}</Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Total Berat</Text>
@@ -474,63 +353,9 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cardTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: COLORS.text },
   addressPreview: { marginTop: 8, marginLeft: 28 },
-  fulfillmentSwitch: {
-    marginTop: 12,
-    flexDirection: 'row',
-    backgroundColor: COLORS.background,
-    borderRadius: RADIUS.md,
-    padding: 6,
-    gap: 8,
-  },
-  fulfillmentTab: {
-    flex: 1,
-    minHeight: 78,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.md,
-    backgroundColor: 'transparent',
-  },
-  fulfillmentTabActive: {
-    backgroundColor: COLORS.white,
-    borderColor: COLORS.primary,
-    ...SHADOWS.small,
-  },
-  fulfillmentTabIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.primaryBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fulfillmentTabIconActive: {
-    backgroundColor: COLORS.primary,
-  },
-  fulfillmentTabTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  fulfillmentTabTitleActive: {
-    color: COLORS.text,
-  },
-  fulfillmentHelperText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    lineHeight: 18,
-    marginTop: 12,
-  },
   addressLabel: { fontSize: 12, fontWeight: '600', color: COLORS.primary, marginBottom: 2 },
   addressName: { fontSize: 13, fontWeight: '600', color: COLORS.text },
   addressText: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
-  storeMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  pickupHint: { fontSize: 12, color: COLORS.primaryDark, marginTop: 8, fontWeight: '500' },
   selectText: { fontSize: 13, color: COLORS.textLight, marginTop: 8, marginLeft: 28 },
   optionList: {
     backgroundColor: COLORS.white, marginHorizontal: SPACING.lg, marginTop: 2,
@@ -572,17 +397,6 @@ const styles = StyleSheet.create({
   readonlyBadgeTextPusat: {
     color: COLORS.primary,
   },
-  flowCard: {
-    backgroundColor: '#F5F9F2',
-    marginHorizontal: SPACING.lg,
-    marginTop: SPACING.md,
-    borderRadius: RADIUS.md,
-    padding: SPACING.lg,
-    borderWidth: 1,
-    borderColor: '#D7E7CC',
-  },
-  flowTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 10 },
-  flowStep: { fontSize: 12, color: COLORS.textSecondary, lineHeight: 18, marginTop: 4 },
   orderItem: {
     flexDirection: 'row', alignItems: 'center', paddingVertical: 6, marginTop: 4,
   },

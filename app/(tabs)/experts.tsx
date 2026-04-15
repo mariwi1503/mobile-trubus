@@ -33,7 +33,7 @@ export default function ExpertsScreen() {
 
   // If expert, show their consultation history instead of expert list
   if (user.role === 'expert') {
-    return <ConsultationsScreen isTab={true} />;
+    return <ConsultationsScreen isTab={true} mode="active" title="Konsultasi" />;
   }
 
   return (

@@ -1,10 +1,14 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Platform, TouchableOpacity, Animated, Dimensions } from 'react-native';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import CSChatWidget from '../../components/CSChatWidget';
+
+const { width, height } = Dimensions.get('window');
 
 function TabBarIcon({ name, color, badge, size = 28 }: { name: any; color: string; badge?: number; size?: number }) {
   return (
@@ -22,7 +26,6 @@ function TabBarIcon({ name, color, badge, size = 28 }: { name: any; color: strin
 function DraftOrderBanner() {
   const { getDraftOrder } = useApp();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const draftOrder = getDraftOrder();
   const tabBarHeight = Platform.OS === 'ios' ? 90 : 70;
 
@@ -52,9 +55,30 @@ function DraftOrderBanner() {
 }
 
 export default function TabLayout() {
-  const { getCartCount, user } = useApp();
-  const cartCount = getCartCount();
+  const { user, getDraftOrder } = useApp();
   const insets = useSafeAreaInsets();
+  const [chatVisible, setChatVisible] = useState(false);
+  const chatAnim = React.useRef(new Animated.Value(0)).current;
+  const tabBarHeight = Platform.OS === 'ios' ? 90 : 70;
+  const hasDraftOrder = Boolean(getDraftOrder());
+  const floatingBottom = hasDraftOrder ? tabBarHeight + 84 : tabBarHeight + SPACING.lg;
+
+  const openCSChat = () => {
+    setChatVisible(true);
+    Animated.spring(chatAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      bounciness: 6,
+    }).start();
+  };
+
+  const closeCSChat = () => {
+    Animated.timing(chatAnim, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => setChatVisible(false));
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -101,10 +125,19 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="consultation-history"
+          options={{
+            title: 'Riwayat',
+            tabBarIcon: ({ color }) => <TabBarIcon name="time" color={color} />,
+            href: user?.role === 'expert' ? '/(tabs)/consultation-history' : null,
+          }}
+        />
+        <Tabs.Screen
           name="articles"
           options={{
             title: 'Artikel',
             tabBarIcon: ({ color }) => <TabBarIcon name="newspaper" color={color} />,
+            href: user?.role === 'expert' ? null : '/(tabs)/articles',
           }}
         />
         <Tabs.Screen
@@ -118,6 +151,43 @@ export default function TabLayout() {
 
       {/* Global Draft Order Banner — muncul di semua tab, di bawah ikon CS */}
       <DraftOrderBanner />
+
+      {user?.role !== 'expert' && (
+        <View style={[styles.fabCSContainer, { bottom: floatingBottom }]}>
+          <TouchableOpacity style={styles.fabCS} onPress={openCSChat} activeOpacity={0.9}>
+            <Ionicons name="chatbubble-ellipses-outline" size={26} color={COLORS.white} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {chatVisible && (
+        <Animated.View style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            opacity: chatAnim,
+            zIndex: 119,
+          }
+        ]}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeCSChat} />
+        </Animated.View>
+      )}
+
+      {chatVisible && (
+        <Animated.View style={[
+          styles.chatWidgetContainer,
+          { bottom: floatingBottom },
+          {
+            opacity: chatAnim,
+            transform: [
+              { scale: chatAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) },
+              { translateY: chatAnim.interpolate({ inputRange: [0, 1], outputRange: [200, 0] }) }
+            ],
+          }
+        ]}>
+          <CSChatWidget onClose={closeCSChat} isOverlay />
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -151,7 +221,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    zIndex: 99,
+    zIndex: 90,
     ...SHADOWS.large,
   },
   draftBannerLeft: {
@@ -184,5 +254,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.accentOrange,
+  },
+  fabCSContainer: {
+    position: 'absolute',
+    right: SPACING.lg,
+    zIndex: 120,
+    elevation: 12,
+  },
+  fabCS: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.large,
+    elevation: 6,
+    shadowColor: COLORS.primary,
+  },
+  chatWidgetContainer: {
+    position: 'absolute',
+    left: width * 0.05,
+    right: width * 0.05,
+    width: width * 0.9,
+    height: height * 0.7,
+    zIndex: 120,
   },
 });

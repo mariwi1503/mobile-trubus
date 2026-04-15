@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { PRODUCTS, PRODUCT_CATEGORIES } from '../../data/products';
 import ProductCard from '../../components/ProductCard';
@@ -20,11 +20,21 @@ const SORT_OPTIONS = [
 
 export default function CatalogScreen() {
   const router = useRouter();
+  const { category } = useLocalSearchParams<{ category?: string }>();
   const { getCartCount } = useApp();
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState(category || 'all');
   const [sortBy, setSortBy] = useState('popular');
   const [showSort, setShowSort] = useState(false);
+
+  useEffect(() => {
+    if (category && PRODUCT_CATEGORIES.some((item) => item.id === category)) {
+      setSelectedCategory(category);
+      return;
+    }
+
+    setSelectedCategory('all');
+  }, [category]);
 
   const filteredProducts = useMemo(() => {
     let result = [...PRODUCTS];

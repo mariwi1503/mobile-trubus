@@ -62,6 +62,15 @@ export interface RegisteredUser extends UserProfile {
   password: string;
 }
 
+export interface DemoAccount {
+  id: string;
+  label: string;
+  description: string;
+  phone: string;
+  password: string;
+  role: UserProfile['role'];
+}
+
 interface AppContextType {
   // Auth
   isLoggedIn: boolean;
@@ -113,6 +122,25 @@ const guestUser: UserProfile = {
   name: 'Tamu', email: '', phone: '', avatar: '', role: 'consumer', trubusCoins: 0
 };
 
+export const DEMO_ACCOUNTS: DemoAccount[] = [
+  {
+    id: 'demo-user',
+    label: 'Quick login',
+    description: 'Cocok untuk mencoba belanja, artikel, dan pesan konsultasi.',
+    phone: '081234567890',
+    password: '123456',
+    role: 'consumer',
+  },
+  // {
+  //   id: 'demo-expert',
+  //   label: 'Ahli',
+  //   description: 'Cocok untuk mencoba dashboard ahli dan menerima konsultasi customer.',
+  //   phone: '081298765432',
+  //   password: '123456',
+  //   role: 'expert',
+  // },
+];
+
 const defaultAddresses: Address[] = [
   {
     id: 'addr1', label: 'Rumah', recipient: 'Budi Santoso', phone: '081234567890',
@@ -155,6 +183,97 @@ const defaultTransactions: Transaction[] = [
   { id: 'tx3', type: 'transfer_in', amount: 10000, date: '2026-02-10T09:15:00Z', description: 'Transfer dari Budi', status: 'success' },
 ];
 
+const defaultOrders: Order[] = [
+  {
+    id: 'CONS-1001',
+    type: 'consultation',
+    expertId: '1',
+    expertName: 'Dr. Ir. Bambang Suryadi',
+    consultationDate: '2026-04-09',
+    consultationTime: '09:00',
+    totalAmount: 75000,
+    status: 'pending_payment',
+    createdAt: '2026-04-07T08:15:00Z',
+    clientName: 'Budi Santoso',
+    clientPhone: '081234567890',
+    clientAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
+  },
+  {
+    id: 'CONS-1002',
+    type: 'consultation',
+    expertId: '1',
+    expertName: 'Dr. Ir. Bambang Suryadi',
+    consultationDate: '2026-04-08',
+    consultationTime: '14:00',
+    totalAmount: 75000,
+    status: 'paid',
+    paymentMethod: 'BCA Virtual Account',
+    createdAt: '2026-04-06T10:30:00Z',
+    clientName: 'Budi Santoso',
+    clientPhone: '081234567890',
+    clientAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
+  },
+  {
+    id: 'CONS-1003',
+    type: 'consultation',
+    expertId: '4',
+    expertName: 'Dr. Rina Wulandari',
+    consultationDate: '2026-04-05',
+    consultationTime: '16:00',
+    totalAmount: 85000,
+    status: 'completed',
+    paymentMethod: 'GoPay',
+    createdAt: '2026-04-04T13:45:00Z',
+    clientName: 'Budi Santoso',
+    clientPhone: '081234567890',
+    clientAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
+  },
+  {
+    id: 'CONS-1004',
+    type: 'consultation',
+    expertId: '1',
+    expertName: 'Dr. Ir. Bambang Suryadi',
+    consultationDate: '2026-04-10',
+    consultationTime: '10:00',
+    totalAmount: 75000,
+    status: 'paid',
+    paymentMethod: 'QRIS',
+    createdAt: '2026-04-07T06:20:00Z',
+    clientName: 'Sari Dewi',
+    clientPhone: '081377788899',
+    clientAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop&crop=face',
+  },
+  {
+    id: 'CONS-1005',
+    type: 'consultation',
+    expertId: '5',
+    expertName: 'Ir. Hendra Kusuma, M.Si.',
+    consultationDate: '2026-04-03',
+    consultationTime: '11:00',
+    totalAmount: 70000,
+    status: 'completed',
+    paymentMethod: 'Mandiri Virtual Account',
+    createdAt: '2026-04-02T09:10:00Z',
+    clientName: 'Rudi Hartono',
+    clientPhone: '081388877766',
+    clientAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop&crop=face',
+  },
+  {
+    id: 'CONS-1006',
+    type: 'consultation',
+    expertId: '1',
+    expertName: 'Dr. Ir. Bambang Suryadi',
+    consultationDate: '2026-04-01',
+    consultationTime: '08:00',
+    totalAmount: 75000,
+    status: 'cancelled',
+    createdAt: '2026-03-31T07:00:00Z',
+    clientName: 'Andi Saputra',
+    clientPhone: '081355566677',
+    clientAvatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&h=200&fit=crop&crop=face',
+  },
+];
+
 // Pre-seeded users for demo
 const seedUsers: RegisteredUser[] = [
   {
@@ -185,7 +304,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [addresses, setAddresses] = useState<Address[]>(defaultAddresses);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>(defaultOrders);
   const [notifications, setNotifications] = useState<Notification[]>(defaultNotifications);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>(defaultTransactions);

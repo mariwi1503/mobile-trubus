@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
-import { useApp, RegisteredUser } from '../../context/AppContext';
+import { DEMO_ACCOUNTS, useApp, RegisteredUser } from '../../context/AppContext';
 import { useAlert } from '../../context/AlertContext';
 
 // ─── Auth Modal ───────────────────────────────────────────────
@@ -29,6 +30,13 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
     const result = login(phone, password);
     if (result.success) { reset(); onClose(); }
     else setError(result.error || 'Login gagal');
+  };
+
+  const handleDemoLogin = (phoneNumber: string, passwordValue: string) => {
+    setError('');
+    const result = login(phoneNumber, passwordValue);
+    if (result.success) { reset(); onClose(); }
+    else setError(result.error || 'Login demo gagal');
   };
 
   const handleRegister = () => {
@@ -109,18 +117,36 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
             )}
 
             {mode === 'login' && (
-              <TouchableOpacity
-                style={styles.demoQuickBtn}
-                onPress={() => {
-                  const result = login('081234567890', '123456');
-                  if (result.success) { reset(); onClose(); }
-                  else setError(result.error || 'Login gagal');
-                }}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="flash" size={15} color={COLORS.primary} />
-                <Text style={styles.demoQuickBtnText}>Quick Login (Demo)</Text>
-              </TouchableOpacity>
+              <View style={styles.demoSection}>
+                <Text style={styles.demoSectionTitle}>Login demo</Text>
+                <View style={styles.demoGrid}>
+                  {DEMO_ACCOUNTS.map((account) => (
+                    <TouchableOpacity
+                      key={account.id}
+                      style={[
+                        styles.demoCard,
+                        account.role === 'expert' && styles.demoCardExpert,
+                      ]}
+                      onPress={() => handleDemoLogin(account.phone, account.password)}
+                      activeOpacity={0.9}
+                    >
+                      <Ionicons
+                        name={account.role === 'expert' ? 'school-outline' : 'person-outline'}
+                        size={16}
+                        color={account.role === 'expert' ? '#1B5E20' : COLORS.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.demoCardTitle,
+                          account.role === 'expert' && styles.demoCardTitleExpert,
+                        ]}
+                      >
+                        {account.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
             )}
 
             <TouchableOpacity style={styles.submitBtn} onPress={mode === 'login' ? handleLogin : handleRegister}>
@@ -141,26 +167,22 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
   );
 }
 
-// ─── Expert Dashboard ─────────────────────────────────────────
-function ExpertDashboard() {
+// ─── Expert Profile ───────────────────────────────────────────
+function ExpertProfile() {
   const router = useRouter();
-  const { user, orders, logout, updateStatus } = useApp();
+  const { user, logout, updateStatus } = useApp();
   const { showAlert } = useAlert();
-
-  const myConsultations = orders.filter(o => o.type === 'consultation');
-  const pending = myConsultations.filter(o => o.status === 'pending_payment');
-  const scheduled = myConsultations.filter(o => o.status === 'paid');
-  const completed = myConsultations.filter(o => o.status === 'completed' || o.status === 'delivered');
-  const totalEarnings = myConsultations.filter(o => o.status === 'paid' || o.status === 'completed').reduce((s, o) => s + o.totalAmount, 0);
-  const thisMonthEarnings = myConsultations.filter(o => {
-    const d = new Date(o.createdAt);
-    const now = new Date();
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && (o.status === 'paid' || o.status === 'completed');
-  }).reduce((s, o) => s + o.totalAmount, 0);
+  const expertMenuItems = [
+    { icon: 'receipt-outline', label: 'Riwayat Konsultasi', route: '/(tabs)/consultation-history', color: '#2196F3' },
+    { icon: 'notifications-outline', label: 'Notifikasi', route: '/notifications', color: '#9C27B0' },
+    { icon: 'document-text-outline', label: 'FAQ', route: '/faq', color: '#4CAF50' },
+    { icon: 'reader-outline', label: 'Syarat & Ketentuan', route: '/terms?readonly=1', color: '#7C3AED' },
+    { icon: 'information-circle-outline', label: 'Tentang Aplikasi', route: '/about', color: '#43A047' },
+    { icon: 'help-circle-outline', label: 'Pusat Bantuan', route: '/customer-service', color: '#00BCD4' },
+  ];
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
       <View style={styles.expertHeader}>
         <View style={styles.profileRow}>
           <Image source={{ uri: user.avatar }} style={styles.avatar} />
@@ -185,7 +207,6 @@ function ExpertDashboard() {
           </View>
         </View>
 
-        {/* Status Toggle */}
         <View style={styles.statusToggleContainer}>
           <Text style={styles.statusToggleLabel}>Set Status:</Text>
           <View style={styles.statusButtons}>
@@ -209,137 +230,30 @@ function ExpertDashboard() {
         </View>
       </View>
 
-      {/* Earnings Card */}
-      <View style={styles.earningsCard}>
-        <Text style={styles.earningsTitle}>Pendapatan</Text>
-        <View style={styles.earningsRow}>
-          <View style={styles.earningsItem}>
-            <Text style={styles.earningsLabel}>Bulan Ini</Text>
-            <Text style={styles.earningsAmount}>Rp {thisMonthEarnings.toLocaleString('id-ID')}</Text>
-          </View>
-          <View style={styles.earningsDivider} />
-          <View style={styles.earningsItem}>
-            <Text style={styles.earningsLabel}>Total</Text>
-            <Text style={styles.earningsAmount}>Rp {totalEarnings.toLocaleString('id-ID')}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Stats Grid */}
-      <View style={styles.statsGrid}>
-        <View style={[styles.statCard, { backgroundColor: '#FFF3E0' }]}>
-          <Ionicons name="hourglass" size={24} color="#FF9800" />
-          <Text style={styles.statNum}>{pending.length}</Text>
-          <Text style={styles.statLabel}>Menunggu</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: '#E3F2FD' }]}>
-          <Ionicons name="calendar" size={24} color="#2196F3" />
-          <Text style={styles.statNum}>{scheduled.length}</Text>
-          <Text style={styles.statLabel}>Terjadwal</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: '#E8F5E9' }]}>
-          <Ionicons name="checkmark-done" size={24} color="#4CAF50" />
-          <Text style={styles.statNum}>{completed.length}</Text>
-          <Text style={styles.statLabel}>Selesai</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: '#FCE4EC' }]}>
-          <Ionicons name="people" size={24} color="#E91E63" />
-          <Text style={styles.statNum}>{myConsultations.length}</Text>
-          <Text style={styles.statLabel}>Total Klien</Text>
-        </View>
-      </View>
-
-      {/* Incoming Requests */}
-      <View style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Permintaan Konsultasi</Text>
-          <TouchableOpacity onPress={() => router.push('/consultations')}>
-            <Text style={styles.seeAll}>Lihat Semua</Text>
-          </TouchableOpacity>
-        </View>
-        {pending.length === 0 && scheduled.length === 0 ? (
-          <View style={styles.emptySection}>
-            <Ionicons name="chatbubbles-outline" size={32} color={COLORS.textLight} />
-            <Text style={styles.emptySectionText}>Belum ada permintaan konsultasi</Text>
-          </View>
-        ) : (
-          [...pending, ...scheduled].slice(0, 5).map((item) => (
-            <TouchableOpacity key={item.id} style={styles.requestItem} onPress={() => router.push(`/chat/${item.id}`)}>
-              <View style={styles.requestIcon}>
-                <Image
-                  source={{ uri: item.clientAvatar || 'https://ui-avatars.com/api/?name=User' }}
-                  style={{ width: 40, height: 40, borderRadius: 20 }}
-                />
-              </View>
-              <View style={styles.requestInfo}>
-                <Text style={styles.requestName}>{item.clientName || 'Klien'}</Text>
-                <Text style={styles.requestDate}>
-                  {item.consultationDate ? new Date(item.consultationDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '-'} {item.consultationTime ? `| ${item.consultationTime} WIB` : ''}
-                </Text>
-              </View>
-              <View style={[styles.requestStatus, { backgroundColor: item.status === 'paid' ? '#E3F2FD' : '#FFF3E0' }]}>
-                <Text style={[styles.requestStatusText, { color: item.status === 'paid' ? '#2196F3' : '#FF9800' }]}>
-                  {item.status === 'paid' ? 'Terjadwal' : 'Pending'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
-      </View>
-
-      {/* Schedule Management */}
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>Jadwal Hari Ini</Text>
-        {scheduled.filter(s => {
-          if (!s.consultationDate) return false;
-          const today = new Date().toISOString().split('T')[0];
-          return s.consultationDate === today;
-        }).length === 0 ? (
-          <View style={styles.emptySection}>
-            <Ionicons name="calendar-outline" size={32} color={COLORS.textLight} />
-            <Text style={styles.emptySectionText}>Tidak ada jadwal hari ini</Text>
-          </View>
-        ) : (
-          scheduled.filter(s => s.consultationDate === new Date().toISOString().split('T')[0]).map(item => (
-            <View key={item.id} style={styles.scheduleItem}>
-              <View style={styles.scheduleTime}>
-                <Text style={styles.scheduleTimeText}>{item.consultationTime}</Text>
-              </View>
-              <View style={styles.scheduleLine} />
-              <View style={styles.scheduleInfo}>
-                <Text style={styles.scheduleClient}>{item.clientName || 'Klien'}</Text>
-                <Text style={styles.scheduleFee}>Rp {item.totalAmount.toLocaleString('id-ID')}</Text>
-              </View>
-            </View>
-          ))
-        )}
-      </View>
-
-      {/* Menu */}
       <View style={styles.menuSection}>
-        {[
-          { icon: 'receipt-outline', label: 'Riwayat Konsultasi', route: '/consultations', color: '#2196F3' },
-          { icon: 'notifications-outline', label: 'Notifikasi', route: '/notifications', color: '#9C27B0' },
-          { icon: 'document-text-outline', label: 'FAQ', route: '/faq', color: '#4CAF50' },
-          { icon: 'reader-outline', label: 'Syarat & Ketentuan', route: '/terms?readonly=1', color: '#7C3AED' },
-          { icon: 'information-circle-outline', label: 'Tentang Aplikasi', route: '/about', color: '#43A047' },
-          { icon: 'star-outline', label: 'Beri Rating', route: '/rate-app', color: '#FFC107' },
-          { icon: 'help-circle-outline', label: 'Pusat Bantuan', route: '/customer-service', color: '#00BCD4' },
-        ].map((item, i) => (
-          <TouchableOpacity key={i} style={styles.menuItem} onPress={() => item.route ? router.push(item.route as any) : showAlert('Info', 'Fitur segera hadir!')}>
-            <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
-              <Ionicons name={item.icon as any} size={20} color={item.color} />
-            </View>
-            <Text style={styles.menuLabel}>{item.label}</Text>
-            <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
-          </TouchableOpacity>
-        ))}
+        <Text style={styles.menuSectionTitle}>Pengaturan Akun</Text>
+        <View style={styles.menuCard}>
+          {expertMenuItems.map((item, index) => (
+            <TouchableOpacity
+              key={item.label}
+              style={[styles.menuItem, index < expertMenuItems.length - 1 && styles.menuItemBorder]}
+              onPress={() => item.route ? router.push(item.route as any) : showAlert('Info', 'Fitur segera hadir!')}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
+                <Ionicons name={item.icon as any} size={20} color={item.color} />
+              </View>
+              <Text style={styles.menuLabel}>{item.label}</Text>
+              <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       <TouchableOpacity style={styles.logoutBtn} onPress={() => showAlert('Keluar', 'Yakin ingin keluar?', [{ text: 'Batal', style: 'cancel' }, { text: 'Keluar', style: 'destructive', onPress: logout }])}>
         <Ionicons name="log-out-outline" size={20} color={COLORS.accent} />
         <Text style={styles.logoutText}>Keluar</Text>
       </TouchableOpacity>
+      <Text style={styles.version}>Halo Trubus v1.0.0</Text>
       <View style={{ height: 30 }} />
     </ScrollView>
   );
@@ -391,6 +305,37 @@ function ConsumerProfile() {
           </View>
           <TouchableOpacity style={styles.editBtn}><Ionicons name="create-outline" size={18} color={COLORS.white} /></TouchableOpacity>
         </View>
+      </View>
+
+      <View style={styles.loyaltyContainer}>
+        <LinearGradient
+          colors={['#ffffff', '#fef9c3']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.loyaltyInner}
+        >
+          <TouchableOpacity activeOpacity={0.7} style={styles.loyaltyCoin} onPress={() => router.push('/coin-history')}>
+            <View style={styles.loyaltyCoinIcon}>
+              <Ionicons name="gift" size={16} color="#d97706" />
+            </View>
+            <View style={styles.loyaltyCoinContext}>
+              <Text style={styles.loyaltyCoinValue}>{user.trubusCoins ? user.trubusCoins.toLocaleString('id-ID') : 0}</Text>
+              <Text style={styles.loyaltyCoinLabel}>Trubus Coin</Text>
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.loyaltyDivider} />
+
+          <TouchableOpacity activeOpacity={0.7} style={styles.loyaltyMember} onPress={() => router.push('/membership')}>
+            <View style={styles.loyaltyMemberIconWrap}>
+              <Ionicons name="ribbon" size={16} color="#d97706" />
+            </View>
+            <View style={styles.loyaltyMemberContext}>
+              <Text style={styles.loyaltyMemberText}>Gold</Text>
+              <Text style={styles.loyaltyMemberLabel}>Membership</Text>
+            </View>
+          </TouchableOpacity>
+        </LinearGradient>
       </View>
 
 
@@ -493,7 +438,7 @@ export default function ProfileScreen() {
   }
 
   if (user.role === 'expert') {
-    return <ExpertDashboard />;
+    return <ExpertProfile />;
   }
 
   return <ConsumerProfile />;
@@ -527,24 +472,28 @@ const styles = StyleSheet.create({
   hintText: { fontSize: 11, color: COLORS.textLight, marginTop: 8, textAlign: 'center' },
   demoContainer: { marginTop: 12, alignItems: 'center', backgroundColor: '#F5F5F5', padding: 8, borderRadius: 8 },
   demoLink: { fontSize: 11, color: COLORS.primary, fontWeight: '600', marginTop: 4 },
-  demoQuickBtn: {
+  demoSection: { marginTop: 16, gap: 8 },
+  demoSectionTitle: { fontSize: 13, fontWeight: '700', color: COLORS.text },
+  demoGrid: { flexDirection: 'row', gap: 10 },
+  demoCard: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    marginTop: 14,
-    paddingVertical: 11,
-    paddingHorizontal: 20,
+    gap: 8,
+    backgroundColor: '#F4FBF6',
     borderRadius: RADIUS.md,
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primaryBg,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
-  demoQuickBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.primary,
+  demoCardExpert: {
+    backgroundColor: '#F2F7F3',
+    borderColor: '#A5D6A7',
   },
+  demoCardTitle: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
+  demoCardTitleExpert: { color: '#1B5E20' },
   submitBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, paddingVertical: 16, alignItems: 'center', marginTop: 20 },
   submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
   switchMode: { alignItems: 'center', marginTop: 16 },
@@ -575,6 +524,19 @@ const styles = StyleSheet.create({
   roleBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start', marginTop: 4 },
   roleText: { fontSize: 10, color: COLORS.white, fontWeight: '600', marginLeft: 3 },
   editBtn: { padding: 8 },
+  loyaltyContainer: { marginHorizontal: SPACING.lg, marginTop: SPACING.lg, backgroundColor: COLORS.white, borderRadius: RADIUS.lg, ...SHADOWS.small, borderWidth: 1, borderColor: '#fef08a', overflow: 'hidden' },
+  loyaltyInner: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16 },
+  loyaltyCoin: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  loyaltyCoinIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#fef3c7', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  loyaltyCoinContext: { flex: 1, justifyContent: 'center' },
+  loyaltyCoinValue: { fontSize: 16, fontWeight: '500', color: COLORS.text, marginBottom: 2 },
+  loyaltyCoinLabel: { fontSize: 10, color: COLORS.textSecondary, fontWeight: '400' },
+  loyaltyDivider: { width: 1, height: 36, backgroundColor: '#fde68a', marginHorizontal: 16 },
+  loyaltyMember: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 8 },
+  loyaltyMemberIconWrap: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#fef3c7', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  loyaltyMemberContext: { flex: 1, justifyContent: 'center' },
+  loyaltyMemberText: { fontSize: 16, color: '#d97706', fontWeight: '500', marginBottom: 2 },
+  loyaltyMemberLabel: { fontSize: 10, color: COLORS.textSecondary, fontWeight: '400' },
   orderStatusCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.md, marginHorizontal: SPACING.lg, marginTop: SPACING.lg, padding: SPACING.lg, ...SHADOWS.small },
   orderStatusTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: SPACING.md },
   orderStatusRow: { flexDirection: 'row', justifyContent: 'space-around' },
@@ -596,29 +558,18 @@ const styles = StyleSheet.create({
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: SPACING.lg, marginTop: SPACING.xl, backgroundColor: COLORS.white, borderRadius: RADIUS.md, paddingVertical: SPACING.md, ...SHADOWS.small, borderWidth: 1, borderColor: '#FFCDD2' },
   logoutText: { fontSize: 14, fontWeight: '600', color: COLORS.accent, marginLeft: 8 },
   version: { textAlign: 'center', fontSize: 12, color: COLORS.textLight, marginTop: SPACING.lg },
-  // Expert Dashboard
-  expertHeader: { backgroundColor: '#1B5E20', paddingTop: 48, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl, borderBottomLeftRadius: RADIUS.xxl, borderBottomRightRadius: RADIUS.xxl },
+  // Expert Profile
+  expertHeader: { backgroundColor: COLORS.primary, paddingTop: 48, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl, borderBottomLeftRadius: RADIUS.xxl, borderBottomRightRadius: RADIUS.xxl },
   expertBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   verifiedBadge: {},
   expertSpec: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   expertRoleBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start', marginTop: 4, gap: 3 },
   expertRoleText: { fontSize: 10, color: COLORS.white, fontWeight: '600' },
-  statusToggleContainer: { marginTop: 16, backgroundColor: 'rgba(255,255,255,0.1)', padding: 12, borderRadius: 12 },
-  statusToggleLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 11, marginBottom: 8, fontWeight: '600' },
+  statusToggleContainer: { marginTop: 16, backgroundColor: COLORS.white, padding: 12, borderRadius: 12, ...SHADOWS.small },
+  statusToggleLabel: { color: COLORS.textSecondary, fontSize: 11, marginBottom: 8, fontWeight: '600' },
   statusButtons: { flexDirection: 'row', gap: 8 },
-  statusBtn: { flex: 1, paddingVertical: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', backgroundColor: 'transparent' },
-  statusBtnText: { fontSize: 11, color: 'white', fontWeight: '600' },
-  earningsCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.md, marginHorizontal: SPACING.lg, marginTop: -20, padding: SPACING.lg, ...SHADOWS.medium },
-  earningsTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 12 },
-  earningsRow: { flexDirection: 'row' },
-  earningsItem: { flex: 1, alignItems: 'center' },
-  earningsLabel: { fontSize: 12, color: COLORS.textSecondary },
-  earningsAmount: { fontSize: 18, fontWeight: '700', color: COLORS.primaryDark, marginTop: 4 },
-  earningsDivider: { width: 1, backgroundColor: COLORS.divider },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: SPACING.lg, marginTop: SPACING.lg, gap: 10 },
-  statCard: { width: '47%', borderRadius: RADIUS.md, padding: SPACING.lg, alignItems: 'center', ...SHADOWS.small },
-  statNum: { fontSize: 24, fontWeight: '700', color: COLORS.text, marginTop: 6 },
-  statLabel: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+  statusBtn: { flex: 1, paddingVertical: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background },
+  statusBtnText: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '600' },
   sectionCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.md, marginHorizontal: SPACING.lg, marginTop: SPACING.lg, padding: SPACING.lg, ...SHADOWS.small },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text },

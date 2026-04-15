@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
@@ -15,12 +15,63 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
     cancelled: { label: 'Dibatalkan', color: '#F44336', bg: '#FFEBEE' },
 };
 
-export default function ConsultationsScreen({ isTab = false }: { isTab?: boolean }) {
+const EXPERT_FILTERS = [
+    { id: 'all', label: 'Semua' },
+    { id: 'pending', label: 'Menunggu' },
+    { id: 'paid', label: 'Terjadwal' },
+    { id: 'completed', label: 'Selesai' },
+];
+
+const EXPERT_HISTORY_FILTERS = [
+    { id: 'all', label: 'Semua' },
+    { id: 'completed', label: 'Selesai' },
+    { id: 'cancelled', label: 'Closed' },
+];
+
+export default function ConsultationsScreen({
+    isTab = false,
+    mode = 'all',
+    title,
+}: {
+    isTab?: boolean;
+    mode?: 'all' | 'active' | 'history';
+    title?: string;
+}) {
     const router = useRouter();
     const { orders, user } = useApp();
     const insets = useSafeAreaInsets();
+    const [selectedFilter, setSelectedFilter] = useState('all');
+    const isExpertUser = user.role === 'expert';
 
     const consultations = orders.filter(o => o.type === 'consultation');
+    const expertConsultations = useMemo(() => {
+        if (!isExpertUser) return consultations;
+        if (mode === 'active') {
+            return consultations.filter((item) => ['draft', 'pending_payment', 'paid'].includes(item.status));
+        }
+        if (mode === 'history') {
+            return consultations.filter((item) => ['completed', 'cancelled', 'delivered'].includes(item.status));
+        }
+        return consultations;
+    }, [consultations, isExpertUser, mode]);
+
+    const filteredConsultations = useMemo(() => {
+        if (!isExpertUser || selectedFilter === 'all') return expertConsultations;
+        if (mode === 'active' && selectedFilter === 'pending') {
+            return expertConsultations.filter((item) => item.status === 'pending_payment' || item.status === 'draft');
+        }
+        return expertConsultations.filter((item) => item.status === selectedFilter);
+    }, [expertConsultations, isExpertUser, mode, selectedFilter]);
+
+    const headerTitle = title || (
+        isExpertUser
+            ? mode === 'history'
+                ? 'Riwayat Konsultasi'
+                : 'Konsultasi'
+            : 'Riwayat Konsultasi'
+    );
+
+    const activeFilters = mode === 'history' ? EXPERT_HISTORY_FILTERS : EXPERT_FILTERS;
 
     return (
         <View style={[styles.container, { paddingBottom: insets.bottom }]}>
@@ -30,32 +81,80 @@ export default function ConsultationsScreen({ isTab = false }: { isTab?: boolean
                         <Ionicons name="arrow-back" size={22} color={COLORS.text} />
                     </TouchableOpacity>
                 )}
-                <Text style={styles.headerTitle}>Riwayat Konsultasi</Text>
+                <Text style={styles.headerTitle}>{headerTitle}</Text>
                 <View style={{ width: 22 }} />
             </View>
 
-            {consultations.length === 0 ? (
+            {(isExpertUser ? expertConsultations : consultations).length === 0 ? (
                 <View style={styles.empty}>
                     <Ionicons name="chatbubbles-outline" size={48} color={COLORS.textLight} />
-                    <Text style={styles.emptyTitle}>Belum Ada Konsultasi</Text>
-                    <Text style={styles.emptySubtext}>Mulai konsultasi dengan ahli pertanian sekarang!</Text>
-                    <TouchableOpacity style={styles.startBtn} onPress={() => router.push('/(tabs)/experts')}>
-                        <Text style={styles.startBtnText}>Cari Ahli</Text>
-                    </TouchableOpacity>
+                    <Text style={styles.emptyTitle}>
+                        {isExpertUser
+                            ? mode === 'history'
+                                ? 'Belum Ada Riwayat Konsultasi'
+                                : 'Belum Ada Konsultasi Aktif'
+                            : 'Belum Ada Konsultasi'}
+                    </Text>
+                    <Text style={styles.emptySubtext}>
+                        {isExpertUser
+                            ? mode === 'history'
+                                ? 'Riwayat konsultasi selesai atau closed akan muncul di sini.'
+                                : 'Konsultasi yang aktif atau akan datang akan muncul di sini.'
+                            : 'Mulai konsultasi dengan ahli pertanian sekarang!'}
+                    </Text>
+                    {!isExpertUser && (
+                        <TouchableOpacity style={styles.startBtn} onPress={() => router.push('/(tabs)/experts')}>
+                            <Text style={styles.startBtnText}>Cari Ahli</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             ) : (
                 <FlatList
-                    data={consultations}
+                    data={filteredConsultations}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingBottom: 20 }}
+                    ListHeaderComponent={isExpertUser ? (
+                        <View style={styles.filterSection}>
+                            <Text style={styles.filterTitle}>Filter Chat</Text>
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={styles.filterRow}
+                            >
+                                {activeFilters.map((filter) => (
+                                    <TouchableOpacity
+                                        key={filter.id}
+                                        style={[
+                                            styles.filterChip,
+                                            selectedFilter === filter.id && styles.filterChipActive,
+                                        ]}
+                                        onPress={() => setSelectedFilter(filter.id)}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.filterChipText,
+                                                selectedFilter === filter.id && styles.filterChipTextActive,
+                                            ]}
+                                        >
+                                            {filter.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+                    ) : null}
+                    ListEmptyComponent={isExpertUser ? (
+                        <View style={styles.emptyFiltered}>
+                            <Ionicons name="funnel-outline" size={28} color={COLORS.textLight} />
+                            <Text style={styles.emptyFilteredTitle}>Tidak ada chat pada filter ini</Text>
+                            <Text style={styles.emptyFilteredText}>Coba pilih filter lain untuk melihat konsultasi.</Text>
+                        </View>
+                    ) : null}
                     renderItem={({ item }) => {
                         const status = STATUS_MAP[item.status] || STATUS_MAP.pending_payment;
                         const expert = EXPERTS.find(e => e.id === item.expertId);
                         const date = item.consultationDate ? new Date(item.consultationDate) : new Date(item.createdAt);
                         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-
-
-                        const isExpertUser = user.role === 'expert';
 
                         return (
                             <TouchableOpacity
@@ -153,6 +252,40 @@ const styles = StyleSheet.create({
         paddingHorizontal: 24, paddingVertical: 12, marginTop: 20,
     },
     startBtnText: { color: COLORS.white, fontSize: 15, fontWeight: '700' },
+    filterSection: { paddingTop: SPACING.md },
+    filterTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 10 },
+    filterRow: { paddingBottom: 4, gap: 8 },
+    filterChip: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: RADIUS.full,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        backgroundColor: COLORS.white,
+    },
+    filterChipActive: {
+        backgroundColor: COLORS.primary,
+        borderColor: COLORS.primary,
+    },
+    filterChipText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: COLORS.textSecondary,
+    },
+    filterChipTextActive: {
+        color: COLORS.white,
+    },
+    emptyFiltered: {
+        alignItems: 'center',
+        backgroundColor: COLORS.white,
+        borderRadius: RADIUS.md,
+        paddingVertical: 28,
+        paddingHorizontal: 20,
+        marginTop: SPACING.md,
+        ...SHADOWS.small,
+    },
+    emptyFilteredTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginTop: 10 },
+    emptyFilteredText: { fontSize: 12, color: COLORS.textSecondary, textAlign: 'center', marginTop: 6 },
     card: {
         backgroundColor: COLORS.white, borderRadius: RADIUS.md,
         padding: SPACING.lg, marginTop: SPACING.md, ...SHADOWS.small,
