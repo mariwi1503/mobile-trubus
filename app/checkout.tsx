@@ -33,6 +33,13 @@ const STORES = [
   { id: 's4', name: 'Trubus Store Yogyakarta', city: 'Yogyakarta', type: 'Cabang' },
 ];
 
+function generateProductOrderCode() {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const randomPart = Math.random().toString(36).slice(2, 8).toUpperCase();
+
+  return `PROD-${timestamp}-${randomPart}`;
+}
+
 export default function CheckoutScreen() {
   const router = useRouter();
   const { rewardProductId, coinCost } = useLocalSearchParams<{ rewardProductId?: string; coinCost?: string }>();
@@ -85,9 +92,10 @@ export default function CheckoutScreen() {
       return;
     }
 
-    const orderId = `ORD-${Date.now().toString(36).toUpperCase()}`;
+    const orderId = generateProductOrderCode();
     const order = {
       id: orderId,
+      orderCode: orderId,
       type: 'product' as const,
       items: [...checkoutItems],
       totalAmount: total,
@@ -97,7 +105,7 @@ export default function CheckoutScreen() {
       courier: courier?.name || '',
       address: selectedAddress,
       store: store?.name || '',
-      status: isRewardCheckout && total === 0 ? 'paid' as const : 'draft' as const,
+      status: isRewardCheckout && total === 0 ? 'paid' as const : 'pending_payment' as const,
       createdAt: new Date().toISOString(),
     };
 

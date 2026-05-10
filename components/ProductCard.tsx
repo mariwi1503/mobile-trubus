@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING, CARD_WIDTH } from '../constants/theme';
-import { Product } from '../data/products';
+import { Product } from '../types/product';
 import { useApp } from '../context/AppContext';
 
 interface ProductCardProps {
@@ -18,11 +18,11 @@ export default function ProductCard({ product, compact, fullWidth }: ProductCard
   const router = useRouter();
   const { addToCart, wishlist, toggleWishlist } = useApp();
   const isWished = wishlist.includes(product.id);
-  const discount = product.originalPrice ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
   const imageSource = typeof product.image === 'string' ? { uri: product.image } : product.image;
 
   const handleAddToCart = (e: any) => {
     e.stopPropagation?.();
+
     addToCart({
       productId: product.id,
       name: product.name,
@@ -43,11 +43,6 @@ export default function ProductCard({ product, compact, fullWidth }: ProductCard
     >
       <View style={styles.imageContainer}>
         <Image source={imageSource} style={styles.image} />
-        {discount > 0 && (
-          <View style={styles.discountBadge}>
-            <Text style={styles.discountText}>{discount}%</Text>
-          </View>
-        )}
         <TouchableOpacity style={styles.wishlistBtn} onPress={() => toggleWishlist(product.id)}>
           <Ionicons name={isWished ? 'heart' : 'heart-outline'} size={18} color={isWished ? COLORS.accent : COLORS.textLight} />
         </TouchableOpacity>
@@ -55,14 +50,21 @@ export default function ProductCard({ product, compact, fullWidth }: ProductCard
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={2}>{product.name}</Text>
         <Text style={styles.price}>Rp {product.price.toLocaleString('id-ID')}</Text>
-        {product.originalPrice && (
-          <Text style={styles.originalPrice}>Rp {product.originalPrice.toLocaleString('id-ID')}</Text>
-        )}
         <View style={styles.meta}>
           <View style={styles.ratingRow}>
             <Ionicons name="star" size={12} color={COLORS.warning} />
-            <Text style={styles.rating}>{product.rating}</Text>
-            <Text style={styles.sold}> | {product.sold > 1000 ? `${(product.sold/1000).toFixed(1)}rb` : product.sold} terjual</Text>
+            <Text style={styles.metaCaption}>{product.rating.toFixed(1)}</Text>
+            <View style={styles.metaDot} />
+            <Ionicons name="cube-outline" size={12} color={COLORS.textLight} />
+            <Text style={styles.metaCaption}>{product.uom}</Text>
+            <View style={styles.metaDot} />
+            <Ionicons name="bag-check-outline" size={12} color={COLORS.textLight} />
+            <Text style={styles.sold}>
+              {product.sold > 1000
+                ? `${(product.sold / 1000).toFixed(1)}rb`
+                : product.sold}{' '}
+              terjual
+            </Text>
           </View>
         </View>
         <TouchableOpacity style={styles.addBtn} onPress={handleAddToCart}>
@@ -89,12 +91,6 @@ const styles = StyleSheet.create({
 
   imageContainer: { position: 'relative' },
   image: { width: '100%', height: 110, backgroundColor: '#f0f0f0' },
-  discountBadge: {
-    position: 'absolute', top: 8, left: 8,
-    backgroundColor: COLORS.accent, borderRadius: RADIUS.xs,
-    paddingHorizontal: 6, paddingVertical: 2,
-  },
-  discountText: { color: COLORS.white, fontSize: 10, fontWeight: '700' },
   wishlistBtn: {
     position: 'absolute', top: 6, right: 6,
     backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: RADIUS.full,
@@ -103,11 +99,11 @@ const styles = StyleSheet.create({
   info: { padding: SPACING.sm },
   name: { fontSize: 12, fontWeight: '500', color: COLORS.text, marginBottom: 4, lineHeight: 16 },
   price: { fontSize: 14, fontWeight: '700', color: COLORS.primaryDark },
-  originalPrice: { fontSize: 11, color: COLORS.textLight, textDecorationLine: 'line-through' },
   meta: { marginTop: 4 },
   ratingRow: { flexDirection: 'row', alignItems: 'center' },
-  rating: { fontSize: 11, color: COLORS.text, fontWeight: '600', marginLeft: 2 },
+  metaCaption: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '600', marginLeft: 2 },
   sold: { fontSize: 10, color: COLORS.textLight },
+  metaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: COLORS.textLight, marginHorizontal: 6 },
   addBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     backgroundColor: COLORS.primary, borderRadius: RADIUS.sm,

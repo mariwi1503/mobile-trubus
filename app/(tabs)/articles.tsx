@@ -1,33 +1,107 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
-import { ARTICLES, ARTICLE_CATEGORIES } from '../../data/articles';
 import ArticleCard from '../../components/ArticleCard';
 import SearchBar from '../../components/SearchBar';
+import { getMobileArticleCategories, getMobileArticles } from '../../lib/articles';
+import { Article, ArticleCategory } from '../../types/article';
 
 export default function ArticlesScreen() {
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [categories, setCategories] = useState<ArticleCategory[]>([]);
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const filteredArticles = useMemo(() => {
-    let result = ARTICLES;
-    if (selectedCategory !== 'all') {
-      result = result.filter(a => a.category === selectedCategory);
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter(a =>
-        a.title.toLowerCase().includes(q) ||
-        a.excerpt.toLowerCase().includes(q) ||
-        a.author.toLowerCase().includes(q)
-      );
-    }
-    return result;
-  }, [search, selectedCategory]);
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 350);
 
-  const featuredArticle = filteredArticles[0];
-  const restArticles = filteredArticles.slice(1);
+    return () => clearTimeout(timeout);
+  }, [search]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCategories = async () => {
+      try {
+        const response = await getMobileArticleCategories();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setCategories(response);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setCategories([]);
+      }
+    };
+
+    void loadCategories();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadArticles = async () => {
+      try {
+        setLoading(true);
+
+        const response = await getMobileArticles({
+          page: 1,
+          perPage: 25,
+          search: debouncedSearch || undefined,
+          articleCategoryId:
+            selectedCategory !== 'all' ? selectedCategory : undefined,
+        });
+
+        if (!isMounted) {
+          return;
+        }
+
+        setArticles(response.articles);
+        setError(null);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setArticles([]);
+        setError('Artikel belum dapat dimuat dari backend.');
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadArticles();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [debouncedSearch, selectedCategory, reloadKey]);
+
+  const articleCategories = [
+    { id: 'all', name: 'Semua', slug: 'all' },
+    ...categories,
+  ];
+  const featuredArticle = articles[0];
+  const restArticles = articles.slice(1);
+  const isRefreshing = loading && articles.length > 0;
 
   return (
     <View style={styles.container}>
@@ -47,7 +121,7 @@ export default function ArticlesScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.catScrollContent}
         >
-          {ARTICLE_CATEGORIES.map((cat) => (
+          {articleCategories.map((cat) => (
             <TouchableOpacity
               key={cat.id}
               style={[styles.catChip, selectedCategory === cat.id && styles.catChipActive]}
@@ -67,8 +141,20 @@ export default function ArticlesScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => setReloadKey((current) => current + 1)}
+            tintColor={COLORS.primary}
+          />
+        }
         ListHeaderComponent={
-          featuredArticle ? (
+          loading && articles.length === 0 ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.loadingText}>Memuat artikel...</Text>
+            </View>
+          ) : featuredArticle ? (
             <View style={styles.featuredWrap}>
               <ArticleCard article={featuredArticle} featured />
               {restArticles.length > 0 && <Text style={styles.sectionTitle}>Artikel Terbaru</Text>}
@@ -77,10 +163,16 @@ export default function ArticlesScreen() {
         }
         renderItem={({ item }) => <ArticleCard article={item} />}
         ListEmptyComponent={
-          !featuredArticle ? (
+          !loading && !featuredArticle ? (
             <View style={styles.empty}>
-              <Ionicons name="newspaper-outline" size={48} color={COLORS.textLight} />
-              <Text style={styles.emptyText}>Tidak ada artikel ditemukan</Text>
+              <Ionicons
+                name={error ? 'cloud-offline-outline' : 'newspaper-outline'}
+                size={48}
+                color={COLORS.textLight}
+              />
+              <Text style={styles.emptyText}>
+                {error || 'Tidak ada artikel ditemukan'}
+              </Text>
             </View>
           ) : null
         }
@@ -116,22 +208,20 @@ const styles = StyleSheet.create({
   searchWrap: {
     marginTop: SPACING.md
   },
-
-  // FIXED CATEGORIES LAYOUT
   categoriesContainer: {
-    height: 55, // Mengunci tinggi area kategori
+    height: 55,
     backgroundColor: COLORS.background,
     justifyContent: 'center',
   },
   catScrollContent: {
     paddingHorizontal: SPACING.lg,
-    alignItems: 'center', // Sejajar vertikal
+    alignItems: 'center',
   },
   catChip: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.full,
     paddingHorizontal: 16,
-    height: 34, // Tinggi chip konsisten
+    height: 34,
     justifyContent: 'center',
     marginRight: 8,
     borderWidth: 1,
@@ -150,11 +240,20 @@ const styles = StyleSheet.create({
   catChipTextActive: {
     color: COLORS.white
   },
-
-  // LIST STYLING
   listContent: {
     paddingHorizontal: SPACING.lg,
     paddingBottom: 30
+  },
+  loadingWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 18,
+    paddingBottom: 10,
+    gap: SPACING.sm,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
   },
   featuredWrap: {
     paddingTop: 10,
@@ -175,6 +274,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.textSecondary,
-    marginTop: 12
+    marginTop: 12,
+    textAlign: 'center',
   },
 });

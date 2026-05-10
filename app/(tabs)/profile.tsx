@@ -1,45 +1,55 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
-import { DEMO_ACCOUNTS, useApp, RegisteredUser } from '../../context/AppContext';
+import { useApp, RegisteredUser } from '../../context/AppContext';
 import { useAlert } from '../../context/AlertContext';
+
+const DEV_DEFAULT_LOGIN_PHONE = '6287861888809';
+const DEV_DEFAULT_LOGIN_PASSWORD = '@Password1';
 
 // ─── Auth Modal ───────────────────────────────────────────────
 function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { login, register } = useApp();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState(DEV_DEFAULT_LOGIN_PASSWORD);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(DEV_DEFAULT_LOGIN_PHONE);
   const [role, setRole] = useState<'consumer' | 'expert'>('consumer');
   const [specialization, setSpecialization] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { showAlert } = useAlert();
 
-  const reset = () => { setEmail(''); setPassword(''); setConfirmPassword(''); setName(''); setPhone(''); setRole('consumer'); setSpecialization(''); setError(''); };
-
-  const handleLogin = () => {
+  const reset = (nextMode: 'login' | 'register' = 'login') => {
+    setMode(nextMode);
+    setEmail('');
+    setPassword(nextMode === 'login' ? DEV_DEFAULT_LOGIN_PASSWORD : '');
+    setConfirmPassword('');
+    setName('');
+    setPhone(nextMode === 'login' ? DEV_DEFAULT_LOGIN_PHONE : '');
+    setRole('consumer');
+    setSpecialization('');
+    setShowPassword(false);
     setError('');
-    if (!phone || !password) { setError('Nomor Telepon dan password wajib diisi'); return; }
-    const result = login(phone, password);
+  };
+
+  const handleLogin = async () => {
+    setError('');
+    if (!phone) { setError('Nomor Telepon wajib diisi'); return; }
+    setIsSubmitting(true);
+    const result = await login(phone, password);
+    setIsSubmitting(false);
     if (result.success) { reset(); onClose(); }
     else setError(result.error || 'Login gagal');
   };
 
-  const handleDemoLogin = (phoneNumber: string, passwordValue: string) => {
-    setError('');
-    const result = login(phoneNumber, passwordValue);
-    if (result.success) { reset(); onClose(); }
-    else setError(result.error || 'Login demo gagal');
-  };
-
-  const handleRegister = () => {
+  const handleRegister = async () => {
     setError('');
     if (!name || !password || !confirmPassword || !phone) { setError('Nama, Telepon, dan Password wajib diisi'); return; }
     if (password !== confirmPassword) { setError('Konfirmasi password tidak cocok'); return; }
@@ -49,7 +59,9 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
       trubusCoins: 0,
       ...(role === 'expert' ? { specialization, experience: 1, fee: 50000 } : {}),
     };
-    const result = register(data);
+    setIsSubmitting(true);
+    const result = await register(data);
+    setIsSubmitting(false);
     if (result.success) { reset(); onClose(); showAlert('Selamat!', 'Registrasi berhasil!'); }
     else setError(result.error || 'Registrasi gagal');
   };
@@ -77,6 +89,11 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
 
             {mode === 'register' && (
               <>
+                <View style={styles.infoBox}>
+                  <Ionicons name="information-circle" size={16} color={COLORS.primary} />
+                  <Text style={styles.infoText}>Registrasi backend masih mengikuti flow OTP WhatsApp dan belum aktif di aplikasi ini.</Text>
+                </View>
+
                 <Text style={styles.inputLabel}>Nama Lengkap</Text>
                 <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Masukkan nama lengkap" placeholderTextColor={COLORS.textLight} />
 
@@ -92,6 +109,11 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
 
             {mode === 'login' && (
               <>
+                <View style={styles.infoBox}>
+                  <Ionicons name="code-working-outline" size={16} color={COLORS.primary} />
+                  <Text style={styles.infoText}>Default login development sudah terisi otomatis untuk testing.</Text>
+                </View>
+
                 <Text style={styles.inputLabel}>No. Telepon</Text>
                 <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="08xxxxxxxxxx" placeholderTextColor={COLORS.textLight} keyboardType="phone-pad" />
               </>
@@ -116,44 +138,23 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
               </>
             )}
 
-            {mode === 'login' && (
-              <View style={styles.demoSection}>
-                <Text style={styles.demoSectionTitle}>Login demo</Text>
-                <View style={styles.demoGrid}>
-                  {DEMO_ACCOUNTS.map((account) => (
-                    <TouchableOpacity
-                      key={account.id}
-                      style={[
-                        styles.demoCard,
-                        account.role === 'expert' && styles.demoCardExpert,
-                      ]}
-                      onPress={() => handleDemoLogin(account.phone, account.password)}
-                      activeOpacity={0.9}
-                    >
-                      <Ionicons
-                        name={account.role === 'expert' ? 'school-outline' : 'person-outline'}
-                        size={16}
-                        color={account.role === 'expert' ? '#1B5E20' : COLORS.primary}
-                      />
-                      <Text
-                        style={[
-                          styles.demoCardTitle,
-                          account.role === 'expert' && styles.demoCardTitleExpert,
-                        ]}
-                      >
-                        {account.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            <TouchableOpacity style={styles.submitBtn} onPress={mode === 'login' ? handleLogin : handleRegister}>
-              <Text style={styles.submitBtnText}>{mode === 'login' ? 'Masuk' : 'Daftar Sekarang'}</Text>
+            <TouchableOpacity
+              style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
+              onPress={mode === 'login' ? handleLogin : handleRegister}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color={COLORS.white} />
+              ) : (
+                <Text style={styles.submitBtnText}>{mode === 'login' ? 'Masuk' : 'Daftar Sekarang'}</Text>
+              )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.switchMode} onPress={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}>
+            <TouchableOpacity
+              style={styles.switchMode}
+              onPress={() => { reset(mode === 'login' ? 'register' : 'login'); }}
+              disabled={isSubmitting}
+            >
               <Text style={styles.switchText}>
                 {mode === 'login' ? 'Belum punya akun? ' : 'Sudah punya akun? '}
                 <Text style={styles.switchLink}>{mode === 'login' ? 'Daftar' : 'Masuk'}</Text>
@@ -425,8 +426,17 @@ function GuestProfile({ onLogin }: { onLogin: () => void }) {
 
 // ─── Main Profile Screen ──────────────────────────────────────
 export default function ProfileScreen() {
-  const { isLoggedIn, user } = useApp();
+  const { isAuthHydrating, isLoggedIn, user } = useApp();
   const [showAuth, setShowAuth] = useState(false);
+
+  if (isAuthHydrating) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Memuat sesi akun...</Text>
+      </View>
+    );
+  }
 
   if (!isLoggedIn) {
     return (
@@ -459,6 +469,8 @@ const styles = StyleSheet.create({
   logoText: { fontSize: 16, fontWeight: '700', color: COLORS.primaryDark },
   errorBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFEBEE', borderRadius: RADIUS.sm, padding: 10, marginBottom: 12, gap: 6 },
   errorText: { fontSize: 13, color: COLORS.accent, flex: 1 },
+  infoBox: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: COLORS.primaryBg, borderRadius: RADIUS.sm, padding: 10, marginBottom: 12, gap: 6 },
+  infoText: { fontSize: 13, color: COLORS.primaryDark, flex: 1, lineHeight: 18 },
   inputLabel: { fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6, marginTop: 12 },
   input: { backgroundColor: COLORS.background, borderRadius: RADIUS.sm, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border },
   passwordRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.border },
@@ -470,35 +482,14 @@ const styles = StyleSheet.create({
   roleBtnText: { fontSize: 13, fontWeight: '600', color: COLORS.primary },
   roleBtnTextActive: { color: COLORS.white },
   hintText: { fontSize: 11, color: COLORS.textLight, marginTop: 8, textAlign: 'center' },
-  demoContainer: { marginTop: 12, alignItems: 'center', backgroundColor: '#F5F5F5', padding: 8, borderRadius: 8 },
-  demoLink: { fontSize: 11, color: COLORS.primary, fontWeight: '600', marginTop: 4 },
-  demoSection: { marginTop: 16, gap: 8 },
-  demoSectionTitle: { fontSize: 13, fontWeight: '700', color: COLORS.text },
-  demoGrid: { flexDirection: 'row', gap: 10 },
-  demoCard: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#F4FBF6',
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: '#C8E6C9',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-  },
-  demoCardExpert: {
-    backgroundColor: '#F2F7F3',
-    borderColor: '#A5D6A7',
-  },
-  demoCardTitle: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
-  demoCardTitleExpert: { color: '#1B5E20' },
   submitBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, paddingVertical: 16, alignItems: 'center', marginTop: 20 },
+  submitBtnDisabled: { opacity: 0.7 },
   submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
   switchMode: { alignItems: 'center', marginTop: 16 },
   switchText: { fontSize: 14, color: COLORS.textSecondary },
   switchLink: { color: COLORS.primary, fontWeight: '700' },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.background, paddingHorizontal: SPACING.xl },
+  loadingText: { marginTop: 12, color: COLORS.textSecondary, fontSize: 14 },
   // Guest
   guestContainer: { flex: 1, backgroundColor: COLORS.background },
   guestHeader: { backgroundColor: COLORS.primary, paddingTop: 48, paddingBottom: 32, alignItems: 'center', borderBottomLeftRadius: RADIUS.xxl, borderBottomRightRadius: RADIUS.xxl },

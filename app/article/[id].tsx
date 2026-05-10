@@ -1,16 +1,105 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Share } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Share, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
-import { ARTICLES } from '../../data/articles';
+import { COLORS, RADIUS, SPACING } from '../../constants/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  formatArticleDateLong,
+  getArticleContentParagraphs,
+  getMobileArticleById,
+  getMobileArticles,
+} from '../../lib/articles';
+import { Article } from '../../types/article';
+
+async function loadArticleDetailData(articleId: string) {
+  const currentArticle = await getMobileArticleById(articleId);
+  let relatedArticles: Article[] = [];
+
+  try {
+    const relatedResponse = await getMobileArticles({
+      page: 1,
+      perPage: 4,
+      articleCategoryId: currentArticle.categoryId,
+    });
+
+    relatedArticles = relatedResponse.articles
+      .filter((candidate) => candidate.id !== currentArticle.id)
+      .slice(0, 3);
+  } catch {
+    relatedArticles = [];
+  }
+
+  return {
+    article: currentArticle,
+    relatedArticles,
+  };
+}
 
 export default function ArticleDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const article = ARTICLES.find(a => a.id === id);
   const insets = useSafeAreaInsets();
+  const articleId = Array.isArray(id) ? id[0] : id;
+  const [article, setArticle] = useState<Article | null>(null);
+  const [relatedArticles, setRelatedArticles] = useState<Article[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadArticle = async () => {
+      if (!articleId) {
+        if (isMounted) {
+          setError('Artikel tidak ditemukan');
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const nextData = await loadArticleDetailData(articleId);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setArticle(nextData.article);
+        setRelatedArticles(nextData.relatedArticles);
+        setError(null);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setArticle(null);
+        setRelatedArticles([]);
+        setError('Artikel tidak ditemukan');
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadArticle();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [articleId]);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Memuat artikel...</Text>
+      </View>
+    );
+  }
 
   if (!article) {
     return (
@@ -20,7 +109,9 @@ export default function ArticleDetailScreen() {
             <Ionicons name="arrow-back" size={22} color={COLORS.white} />
           </TouchableOpacity>
         </View>
-        <View style={styles.empty}><Text>Artikel tidak ditemukan</Text></View>
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>{error || 'Artikel tidak ditemukan'}</Text>
+        </View>
       </View>
     );
   }
@@ -32,42 +123,45 @@ export default function ArticleDetailScreen() {
       });
     } catch { }
   };
+  const contentParagraphs = getArticleContentParagraphs(article.content);
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  const handleRefresh = async () => {
+    if (!articleId) {
+      return;
+    }
+
+    setRefreshing(true);
+
+    try {
+      const nextData = await loadArticleDetailData(articleId);
+      setArticle(nextData.article);
+      setRelatedArticles(nextData.relatedArticles);
+      setError(null);
+    } catch {
+      setError('Artikel tidak dapat diperbarui saat ini');
+    } finally {
+      setRefreshing(false);
+    }
   };
-
-  // Simple markdown-like rendering
-  const renderContent = (content: string) => {
-    const paragraphs = content.split('\n\n');
-    return paragraphs.map((para, i) => {
-      if (para.startsWith('**') && para.endsWith('**')) {
-        return <Text key={i} style={styles.contentHeading}>{para.replace(/\*\*/g, '')}</Text>;
-      }
-      // Handle bold text within paragraphs
-      const parts = para.split(/(\*\*[^*]+\*\*)/);
-      return (
-        <Text key={i} style={styles.contentText}>
-          {parts.map((part, j) => {
-            if (part.startsWith('**') && part.endsWith('**')) {
-              return <Text key={j} style={styles.contentBold}>{part.replace(/\*\*/g, '')}</Text>;
-            }
-            return part;
-          })}
-        </Text>
-      );
-    });
-  };
-
-  const relatedArticles = ARTICLES.filter(a => a.category === article.category && a.id !== article.id).slice(0, 3);
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              void handleRefresh();
+            }}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+          />
+        }
+      >
         {/* Hero Image */}
         <View style={styles.heroContainer}>
-          <Image source={{ uri: article.image }} style={styles.heroImage} />
+          <Image source={{ uri: article.originalImage || article.image }} style={styles.heroImage} />
           <View style={styles.heroOverlay} />
           <View style={styles.heroHeader}>
             <TouchableOpacity style={styles.heroBtn} onPress={() => router.back()}>
@@ -84,9 +178,7 @@ export default function ArticleDetailScreen() {
         {/* Content */}
         <View style={styles.contentContainer}>
           <View style={styles.categoryBadge}>
-            <Text style={styles.categoryText}>
-              {article.category.charAt(0).toUpperCase() + article.category.slice(1)}
-            </Text>
+            <Text style={styles.categoryText}>{article.category}</Text>
           </View>
 
           <Text style={styles.title}>{article.title}</Text>
@@ -98,7 +190,7 @@ export default function ArticleDetailScreen() {
             </View>
             <View style={styles.metaItem}>
               <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-              <Text style={styles.metaText}>{formatDate(article.date)}</Text>
+              <Text style={styles.metaText}>{formatArticleDateLong(article.publishedAt)}</Text>
             </View>
           </View>
 
@@ -117,7 +209,11 @@ export default function ArticleDetailScreen() {
 
           {/* Article Content */}
           <View style={styles.articleContent}>
-            {renderContent(article.content)}
+            {contentParagraphs.map((paragraph, index) => (
+              <Text key={`${article.id}-${index}`} style={styles.contentText}>
+                {paragraph}
+              </Text>
+            ))}
           </View>
 
           {/* Tags */}
@@ -138,7 +234,7 @@ export default function ArticleDetailScreen() {
                   style={styles.relatedCard}
                   onPress={() => router.push(`/article/${a.id}`)}
                 >
-                  <Image source={{ uri: a.image }} style={styles.relatedImage} />
+                  <Image source={{ uri: a.thumbnailImage || a.image }} style={styles.relatedImage} />
                   <View style={styles.relatedInfo}>
                     <Text style={styles.relatedName} numberOfLines={2}>{a.title}</Text>
                     <Text style={styles.relatedMeta}>{a.readTime} min baca</Text>
@@ -155,6 +251,17 @@ export default function ArticleDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.white },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
   heroContainer: { position: 'relative', height: 260 },
   heroImage: { width: '100%', height: '100%', backgroundColor: '#f0f0f0' },
   heroOverlay: {
@@ -171,6 +278,7 @@ const styles = StyleSheet.create({
   },
   heroActions: { flexDirection: 'row', gap: 8 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyText: { fontSize: 15, color: COLORS.textSecondary },
   header: {
     position: 'absolute', top: 48, left: SPACING.lg, zIndex: 10,
   },
@@ -193,8 +301,6 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: COLORS.divider, marginVertical: 16 },
   articleContent: {},
   contentText: { fontSize: 15, color: COLORS.text, lineHeight: 24, marginBottom: 12 },
-  contentHeading: { fontSize: 17, fontWeight: '700', color: COLORS.text, marginBottom: 8, marginTop: 8 },
-  contentBold: { fontWeight: '700' },
   tagsRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20, flexWrap: 'wrap' },
   tag: { backgroundColor: COLORS.background, borderRadius: RADIUS.full, paddingHorizontal: 10, paddingVertical: 4 },
   tagText: { fontSize: 11, color: COLORS.textSecondary },

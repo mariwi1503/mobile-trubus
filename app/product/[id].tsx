@@ -1,30 +1,116 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
-import { PRODUCTS } from '../../data/products';
 import { useApp } from '../../context/AppContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getRequiredPackagingByProductId } from '../../data/packaging';
+import { getMobileProductById, getMobileProducts } from '../../lib/products';
+import { Product } from '../../types/product';
+
+async function loadProductDetailData(productId: string) {
+  const currentProduct = await getMobileProductById(productId);
+  let relatedProducts: Product[] = [];
+
+  try {
+    const relatedResponse = await getMobileProducts({
+      page: 1,
+      perPage: 8,
+      productCategoryId: currentProduct.categoryId,
+    });
+
+    relatedProducts = relatedResponse.products
+      .filter((candidate) => candidate.id !== currentProduct.id)
+      .slice(0, 4);
+  } catch {
+    relatedProducts = [];
+  }
+
+  return {
+    product: currentProduct,
+    relatedProducts,
+  };
+}
 
 export default function ProductDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { addToCart, wishlist, toggleWishlist, getCartCount } = useApp();
-  const product = PRODUCTS.find(p => p.id === id);
   const [quantity, setQuantity] = useState(1);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const insets = useSafeAreaInsets();
+  const productId = Array.isArray(id) ? id[0] : id;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProduct = async () => {
+      if (!productId) {
+        if (isMounted) {
+          setError('Produk tidak ditemukan');
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const nextData = await loadProductDetailData(productId);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setProduct(nextData.product);
+        setRelatedProducts(nextData.relatedProducts);
+        setError(null);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setProduct(null);
+        setRelatedProducts([]);
+        setError('Produk tidak ditemukan');
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadProduct();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [productId]);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Memuat produk...</Text>
+      </View>
+    );
+  }
 
   if (!product) {
-    return <View style={styles.container}><Text>Produk tidak ditemukan</Text></View>;
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>{error || 'Produk tidak ditemukan'}</Text>
+      </View>
+    );
   }
 
   const isWished = wishlist.includes(product.id);
-  const discount = product.originalPrice ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
-  const relatedProducts = PRODUCTS.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4);
-  const requiredPackaging = getRequiredPackagingByProductId(product.id);
-  const imageSource = typeof product.image === 'string' ? { uri: product.image } : product.image;
+  const imageSource = typeof product.originalImage === 'string'
+    ? { uri: product.originalImage }
+    : product.originalImage;
 
   const handleAddToCart = () => {
     addToCart({
@@ -40,6 +126,25 @@ export default function ProductDetailScreen() {
       { text: 'Lanjut Belanja', style: 'cancel' },
       { text: 'Lihat Keranjang', onPress: () => router.push('/cart') },
     ]);
+  };
+
+  const handleRefresh = async () => {
+    if (!productId) {
+      return;
+    }
+
+    setRefreshing(true);
+
+    try {
+      const nextData = await loadProductDetailData(productId);
+      setProduct(nextData.product);
+      setRelatedProducts(nextData.relatedProducts);
+      setError(null);
+    } catch {
+      setError('Produk tidak dapat diperbarui saat ini');
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   return (
@@ -64,51 +169,49 @@ export default function ProductDetailScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              void handleRefresh();
+            }}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+          />
+        }
+      >
         {/* Product Image */}
         <Image source={imageSource} style={styles.productImage} />
 
         {/* Product Info */}
         <View style={styles.infoSection}>
-          {discount > 0 && (
-            <View style={styles.discountRow}>
-              <View style={styles.discountBadge}>
-                <Text style={styles.discountText}>{discount}% OFF</Text>
-              </View>
-              <Text style={styles.originalPrice}>Rp {product.originalPrice?.toLocaleString('id-ID')}</Text>
-            </View>
-          )}
           <Text style={styles.price}>Rp {product.price.toLocaleString('id-ID')}</Text>
           <Text style={styles.productName}>{product.name}</Text>
 
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
               <Ionicons name="star" size={14} color={COLORS.warning} />
-              <Text style={styles.metaText}>{product.rating} ({product.sold} terjual)</Text>
+              <Text style={styles.metaText}>{product.rating.toFixed(1)}</Text>
             </View>
             <View style={styles.metaItem}>
-              <Ionicons name="cube-outline" size={14} color={COLORS.textSecondary} />
-              <Text style={styles.metaText}>Stok: {product.stock}</Text>
+              <Ionicons name="bag-check-outline" size={14} color={COLORS.primary} />
+              <Text style={styles.metaText}>{product.sold.toLocaleString('id-ID')} terjual</Text>
+            </View>
+            <View style={styles.metaItem}>
+              <Ionicons name="grid-outline" size={14} color={COLORS.textSecondary} />
+              <Text style={styles.metaText}>{product.category}</Text>
             </View>
             <View style={styles.metaItem}>
               <Ionicons name="scale-outline" size={14} color={COLORS.textSecondary} />
-              <Text style={styles.metaText}>{product.weight >= 1000 ? `${product.weight / 1000} kg` : `${product.weight} g`}</Text>
+              <Text style={styles.metaText}>
+                {product.weight >= 1000
+                  ? `${product.weight / 1000} kg`
+                  : `${product.weight} g`} • UOM {product.uom}
+              </Text>
             </View>
           </View>
-        </View>
-
-        {/* Quality Guarantee */}
-        <View style={styles.storeCard}>
-          <View style={styles.storeIcon}>
-            <Ionicons name="shield-checkmark" size={24} color={COLORS.primary} />
-          </View>
-          <View style={styles.storeInfo}>
-            <Text style={styles.storeName}>Jaminan Kualitas Trubus</Text>
-            <Text style={styles.storeLocation}>Produk 100% Original & Bergaransi</Text>
-          </View>
-          {/* <TouchableOpacity style={styles.visitStoreBtn}>
-            <Text style={styles.visitStoreText}>Info</Text>
-          </TouchableOpacity> */}
         </View>
 
         {/* Description */}
@@ -116,20 +219,6 @@ export default function ProductDetailScreen() {
           <Text style={styles.descTitle}>Deskripsi Produk</Text>
           <Text style={styles.descText}>{product.description}</Text>
         </View>
-
-        {requiredPackaging && (
-          <View style={styles.packagingCard}>
-            <View style={styles.packagingIcon}>
-              <Ionicons name="cube-outline" size={18} color={COLORS.primary} />
-            </View>
-            <View style={styles.packagingContent}>
-              <Text style={styles.packagingTitle}>Butuh Packaging Tambahan</Text>
-              <Text style={styles.packagingText}>
-                Produk ini memerlukan {requiredPackaging.name}. Jika belum ada di keranjang, sistem akan menambahkannya saat checkout.
-              </Text>
-            </View>
-          </View>
-        )}
 
         {/* Related Products */}
         {relatedProducts.length > 0 && (
@@ -142,7 +231,7 @@ export default function ProductDetailScreen() {
                   style={styles.relatedCard}
                   onPress={() => router.push(`/product/${p.id}`)}
                 >
-                  <Image source={typeof p.image === 'string' ? { uri: p.image } : p.image} style={styles.relatedImage} />
+                  <Image source={{ uri: p.image }} style={styles.relatedImage} />
                   <Text style={styles.relatedName} numberOfLines={2}>{p.name}</Text>
                   <Text style={styles.relatedPrice}>Rp {p.price.toLocaleString('id-ID')}</Text>
                 </TouchableOpacity>
@@ -161,7 +250,7 @@ export default function ProductDetailScreen() {
             <Ionicons name="remove" size={18} color={COLORS.primary} />
           </TouchableOpacity>
           <Text style={styles.qtyText}>{quantity}</Text>
-          <TouchableOpacity style={styles.qtyBtn} onPress={() => setQuantity(Math.min(product.stock, quantity + 1))}>
+          <TouchableOpacity style={styles.qtyBtn} onPress={() => setQuantity(quantity + 1)}>
             <Ionicons name="add" size={18} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
@@ -176,6 +265,14 @@ export default function ProductDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+  },
+  loadingText: { fontSize: 14, color: COLORS.textSecondary },
   header: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -198,49 +295,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white, padding: SPACING.lg,
     borderTopLeftRadius: RADIUS.md, borderTopRightRadius: RADIUS.md, marginTop: -20,
   },
-  discountRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  discountBadge: { backgroundColor: '#FFEBEE', borderRadius: RADIUS.xs, paddingHorizontal: 6, paddingVertical: 2, marginRight: 8 },
-  discountText: { color: COLORS.accent, fontSize: 11, fontWeight: '700' },
-  originalPrice: { fontSize: 13, color: COLORS.textLight, textDecorationLine: 'line-through' },
   price: { fontSize: 24, fontWeight: '700', color: COLORS.primaryDark },
   productName: { fontSize: 16, fontWeight: '600', color: COLORS.text, marginTop: 8, lineHeight: 22 },
   metaRow: { flexDirection: 'row', marginTop: 10, gap: 16 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText: { fontSize: 12, color: COLORS.textSecondary },
-  storeCard: {
-    backgroundColor: COLORS.white, marginTop: 2, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md,
-    flexDirection: 'row', alignItems: 'center',
-  },
-  storeIcon: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: COLORS.primaryBg, alignItems: 'center', justifyContent: 'center',
-  },
-  storeInfo: { flex: 1, marginLeft: SPACING.md },
-  storeName: { fontSize: 14, fontWeight: '600', color: COLORS.text },
-  storeLocation: { fontSize: 12, color: COLORS.textSecondary },
-  visitStoreBtn: { borderWidth: 1, borderColor: COLORS.primary, borderRadius: RADIUS.sm, paddingHorizontal: 12, paddingVertical: 6 },
-  visitStoreText: { fontSize: 12, color: COLORS.primary, fontWeight: '600' },
   descSection: { backgroundColor: COLORS.white, marginTop: 8, padding: SPACING.lg },
   descTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 8 },
   descText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 20 },
-  packagingCard: {
-    backgroundColor: '#FFF8E8',
-    marginTop: 8,
-    padding: SPACING.lg,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  packagingIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#FFF0C2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  packagingContent: { flex: 1, marginLeft: SPACING.md },
-  packagingTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  packagingText: { fontSize: 12, color: COLORS.textSecondary, marginTop: 4, lineHeight: 18 },
   relatedSection: { padding: SPACING.lg },
   relatedTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: SPACING.md },
   relatedCard: {

@@ -5,13 +5,10 @@ import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAlert } from '../context/AlertContext';
-import { getMissingPackagingForCart } from '../data/packaging';
 
 export default function CartScreen() {
   const router = useRouter();
-  const { cart, updateCartQuantity, removeFromCart, getCartTotal, clearCart, addToCart } = useApp();
-  const { showAlert } = useAlert();
+  const { cart, updateCartQuantity, removeFromCart, getCartTotal, clearCart } = useApp();
   const insets = useSafeAreaInsets();
 
   const handleRemove = (productId: string, name: string) => {
@@ -22,44 +19,6 @@ export default function CartScreen() {
   };
 
   const handleCheckout = () => {
-    const missingPackaging = getMissingPackagingForCart(cart);
-
-    if (missingPackaging.length > 0) {
-      const packagingSummary = missingPackaging
-        .map(({ packagingProduct, missingQuantity }) => `${packagingProduct.name} x${missingQuantity}`)
-        .join(', ');
-
-      showAlert(
-        'Packaging Tambahan Diperlukan',
-        `Beberapa produk di keranjang membutuhkan packaging ekstra. Tambahkan ${packagingSummary} ke keranjang sekarang?`,
-        [
-          { text: 'Nanti Saja', style: 'cancel' },
-          {
-            text: 'Tambah Packaging',
-            onPress: () => {
-              missingPackaging.forEach(({ packagingProduct, missingQuantity }) => {
-                addToCart({
-                  productId: packagingProduct.id,
-                  name: packagingProduct.name,
-                  price: packagingProduct.price,
-                  image: packagingProduct.image,
-                  quantity: missingQuantity,
-                  weight: packagingProduct.weight,
-                  store: packagingProduct.store,
-                });
-              });
-
-              showAlert(
-                'Packaging Ditambahkan',
-                'Packaging wajib sudah ditambahkan ke keranjang. Silakan review total belanja lalu tekan Checkout lagi.'
-              );
-            },
-          },
-        ]
-      );
-      return;
-    }
-
     router.push('/checkout');
   };
 

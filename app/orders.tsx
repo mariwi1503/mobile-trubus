@@ -5,8 +5,10 @@ import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getOrderDisplayCode } from '../lib/order-display';
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+  draft: { label: 'Draft Pembayaran', color: '#FB8C00', bg: '#FFF3E0', icon: 'document-text' },
   pending_payment: { label: 'Menunggu Pembayaran', color: '#FF9800', bg: '#FFF3E0', icon: 'hourglass' },
   paid: { label: 'Dibayar', color: '#2196F3', bg: '#E3F2FD', icon: 'checkmark-circle' },
   processing: { label: 'Diproses', color: '#9C27B0', bg: '#F3E5F5', icon: 'cube' },
@@ -14,6 +16,7 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string; ico
   delivered: { label: 'Diterima', color: '#4CAF50', bg: '#E8F5E9', icon: 'checkmark-done' },
   completed: { label: 'Selesai', color: '#607D8B', bg: '#ECEFF1', icon: 'flag' },
   cancelled: { label: 'Dibatalkan', color: '#F44336', bg: '#FFEBEE', icon: 'close-circle' },
+  expired: { label: 'Kedaluwarsa', color: '#8D6E63', bg: '#EFEBE9', icon: 'time' },
 };
 
 const TABS = ['Semua', 'Belum Bayar', 'Diproses', 'Dikirim', 'Selesai'];
@@ -28,7 +31,7 @@ export default function OrdersScreen() {
 
   const filteredOrders = productOrders.filter(o => {
     switch (activeTab) {
-      case 'Belum Bayar': return o.status === 'pending_payment';
+      case 'Belum Bayar': return o.status === 'draft' || o.status === 'pending_payment' || o.status === 'expired';
       case 'Diproses': return o.status === 'paid' || o.status === 'processing';
       case 'Dikirim': return o.status === 'shipped';
       case 'Selesai': return o.status === 'delivered' || o.status === 'completed';
@@ -83,12 +86,15 @@ export default function OrdersScreen() {
           renderItem={({ item }) => {
             const status = STATUS_MAP[item.status] || STATUS_MAP.pending_payment;
             const date = new Date(item.createdAt);
+            const displayOrderCode = getOrderDisplayCode(item);
+            const canRetryPayment = item.status === 'draft' || item.status === 'pending_payment' || item.status === 'expired';
+            const paymentButtonLabel = item.status === 'expired' ? 'Bayar Ulang' : 'Bayar';
 
             return (
               <View style={styles.orderCard}>
                 <View style={styles.orderHeader}>
                   <View>
-                    <Text style={styles.orderId}>ID: {item.id.toUpperCase()}</Text>
+                    <Text style={styles.orderId}>Kode: {displayOrderCode}</Text>
                     <Text style={styles.orderDate}>
                       {date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </Text>
@@ -143,12 +149,12 @@ export default function OrdersScreen() {
                     <Text style={styles.totalLabel}>Total Belanja</Text>
                     <Text style={styles.totalAmount}>Rp {item.totalAmount.toLocaleString('id-ID')}</Text>
                   </View>
-                  {item.status === 'pending_payment' && (
+                  {canRetryPayment && (
                     <TouchableOpacity
                       style={styles.payNowBtn}
                       onPress={() => router.push({ pathname: '/payment', params: { orderId: item.id } })}
                     >
-                      <Text style={styles.payNowText}>Bayar</Text>
+                      <Text style={styles.payNowText}>{paymentButtonLabel}</Text>
                     </TouchableOpacity>
                   )}
                 </View>

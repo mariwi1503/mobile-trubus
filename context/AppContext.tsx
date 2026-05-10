@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
+import {
+  BackendMobileUser,
+  getMobileUserProfile,
+  loginMobileUser,
+  validateIndonesianMobilePhone,
+  validatePassword,
+} from '../lib/auth';
 
 const Storage = {
   getItem: async (key: string): Promise<string | null> => {
@@ -33,12 +40,21 @@ export interface Address {
 }
 export interface Order {
   id: string; type: 'product' | 'consultation'; items?: CartItem[];
+  orderCode?: string;
   expertId?: string; expertName?: string; consultationDate?: string; consultationTime?: string;
+  expertImage?: string; expertSpecialization?: string;
   totalAmount: number; shippingCost?: number; courier?: string; address?: Address;
   fulfillmentMethod?: 'delivery' | 'pickup';
   coinRedemptionCost?: number;
-  status: 'draft' | 'pending_payment' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'completed' | 'cancelled';
+  status: 'draft' | 'pending_payment' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'expired';
   paymentMethod?: string; createdAt: string; store?: string;
+  paymentGateway?: 'midtrans';
+  paymentProviderOrderId?: string;
+  paymentRedirectUrl?: string;
+  paymentType?: string;
+  paymentExpiresAt?: string;
+  paymentStatusDetail?: string;
+  paymentUpdatedAt?: string;
   // For expert: client info
   clientName?: string; clientPhone?: string; clientAvatar?: string;
 }
@@ -62,25 +78,24 @@ export interface RegisteredUser extends UserProfile {
   password: string;
 }
 
-export interface DemoAccount {
-  id: string;
-  label: string;
-  description: string;
-  phone: string;
-  password: string;
-  role: UserProfile['role'];
-}
+type AuthResult = { success: boolean; error?: string };
+
+type StoredSession = {
+  accessToken: string;
+  user: UserProfile;
+};
 
 interface AppContextType {
   // Auth
+  isAuthHydrating: boolean;
   isLoggedIn: boolean;
+  authToken: string | null;
   user: UserProfile;
   setUser: (user: UserProfile) => void;
   updateStatus: (status: UserProfile['status']) => void; // Added updateStatus
-  login: (phone: string, password: string) => { success: boolean; error?: string };
-  register: (data: RegisteredUser) => { success: boolean; error?: string };
+  login: (phone: string, password: string) => Promise<AuthResult>;
+  register: (data: RegisteredUser) => Promise<AuthResult>;
   logout: () => void;
-  registeredUsers: RegisteredUser[];
   // Onboarding
   isOnboarded: boolean;
   setIsOnboarded: (v: boolean) => void;
@@ -101,7 +116,8 @@ interface AppContextType {
   setDefaultAddress: (id: string) => void;
   // Orders
   orders: Order[];
-  addOrder: (order: Order) => void;
+  addOrder: (order: Order, options?: { silent?: boolean }) => void;
+  patchOrder: (orderId: string, patch: Partial<Order>) => void;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
   updateOrderPayment: (orderId: string, method: string) => void;
   getDraftOrder: () => Order | undefined;
@@ -122,24 +138,30 @@ const guestUser: UserProfile = {
   name: 'Tamu', email: '', phone: '', avatar: '', role: 'consumer', trubusCoins: 0
 };
 
-export const DEMO_ACCOUNTS: DemoAccount[] = [
-  {
-    id: 'demo-user',
-    label: 'Quick login',
-    description: 'Cocok untuk mencoba belanja, artikel, dan pesan konsultasi.',
-    phone: '081234567890',
-    password: '123456',
+const SESSION_STORAGE_KEY = 'session';
+const DEFAULT_MALE_AVATAR = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face';
+const DEFAULT_FEMALE_AVATAR = 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&h=200&fit=crop&crop=face';
+
+function formatPhoneForDisplay(phone: string) {
+  if (phone.startsWith('62')) {
+    return `0${phone.slice(2)}`;
+  }
+
+  return phone;
+}
+
+function normalizeBackendUser(user: BackendMobileUser): UserProfile {
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+
+  return {
+    name: fullName || 'Sahabat Trubus',
+    email: user.email || '',
+    phone: formatPhoneForDisplay(user.phone),
+    avatar: user.gender === 'FEMALE' ? DEFAULT_FEMALE_AVATAR : DEFAULT_MALE_AVATAR,
     role: 'consumer',
-  },
-  // {
-  //   id: 'demo-expert',
-  //   label: 'Ahli',
-  //   description: 'Cocok untuk mencoba dashboard ahli dan menerima konsultasi customer.',
-  //   phone: '081298765432',
-  //   password: '123456',
-  //   role: 'expert',
-  // },
-];
+    trubusCoins: 0,
+  };
+}
 
 const defaultAddresses: Address[] = [
   {
@@ -274,32 +296,14 @@ const defaultOrders: Order[] = [
   },
 ];
 
-// Pre-seeded users for demo
-const seedUsers: RegisteredUser[] = [
-  {
-    name: 'Budi Santoso', email: 'budi@email.com', phone: '081234567890', password: '123456',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
-    role: 'consumer', trubusCoins: 2500
-  },
-  {
-    name: 'Dr. Ir. Bambang Suryadi', email: 'bambang@email.com', phone: '081298765432', password: '123456',
-    avatar: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&h=200&fit=crop&crop=face',
-    role: 'expert', specialization: 'Ahli Hama & Penyakit Tanaman', experience: 15, fee: 75000, status: 'online', trubusCoins: 0
-  },
-  {
-    name: 'Dr. Rina Wulandari', email: 'rina@email.com', phone: '081345678901', password: '123456',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&h=200&fit=crop&crop=face',
-    role: 'expert', specialization: 'Ahli Hidroponik & Urban Farming', experience: 10, fee: 85000, status: 'busy', trubusCoins: 0
-  },
-];
-
 const AppContext = createContext<AppContextType>({} as AppContextType);
 export const useApp = () => useContext(AppContext);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isAuthHydrating, setIsAuthHydrating] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authToken, setAuthToken] = useState<string | null>(null);
   const [user, setUserState] = useState<UserProfile>(guestUser);
-  const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>(seedUsers);
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -308,6 +312,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [notifications, setNotifications] = useState<Notification[]>(defaultNotifications);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>(defaultTransactions);
+
+  const persistSession = useCallback((session: StoredSession) => {
+    Storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  }, []);
+
+  const clearSession = useCallback(() => {
+    Storage.removeItem(SESSION_STORAGE_KEY);
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -328,74 +340,102 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (storedNotifications) setNotifications(JSON.parse(storedNotifications));
         const storedTransactions = await Storage.getItem('transactions');
         if (storedTransactions) setTransactions(JSON.parse(storedTransactions));
-        const storedRegisteredUsers = await Storage.getItem('registeredUsers');
-        if (storedRegisteredUsers) setRegisteredUsers(JSON.parse(storedRegisteredUsers));
-        // Restore session
-        const storedSession = await Storage.getItem('session');
+        const storedSession = await Storage.getItem(SESSION_STORAGE_KEY);
         if (storedSession) {
-          const session = JSON.parse(storedSession);
-          setUserState(session);
-          setIsLoggedIn(true);
+          const session = JSON.parse(storedSession) as Partial<StoredSession>;
+
+          if (session.accessToken) {
+            const backendUser = await getMobileUserProfile(session.accessToken);
+            const normalizedUser = normalizeBackendUser(backendUser);
+            setAuthToken(session.accessToken);
+            setUserState(normalizedUser);
+            setIsLoggedIn(true);
+            persistSession({
+              accessToken: session.accessToken,
+              user: normalizedUser,
+            });
+          } else {
+            clearSession();
+          }
         }
-      } catch { }
+      } catch {
+        clearSession();
+      } finally {
+        setIsAuthHydrating(false);
+      }
     };
     loadData();
-  }, []);
+  }, [clearSession, persistSession]);
 
   // Auth
-  const login = useCallback((phone: string, password: string): { success: boolean; error?: string } => {
-    const found = registeredUsers.find(u => u.phone === phone && u.password === password);
-    if (!found) return { success: false, error: 'Nomor telepon atau password salah' };
-    const { password: _, ...profile } = found;
-    setUserState(profile);
-    setIsLoggedIn(true);
-    Storage.setItem('session', JSON.stringify(profile));
-    return { success: true };
-  }, [registeredUsers]);
+  const login = useCallback(async (phone: string, password: string): Promise<AuthResult> => {
+    const phoneError = validateIndonesianMobilePhone(phone);
+    if (phoneError) {
+      return { success: false, error: phoneError };
+    }
 
-  const register = useCallback((data: RegisteredUser): { success: boolean; error?: string } => {
-    const exists = registeredUsers.find(u => u.phone === data.phone);
-    if (exists) return { success: false, error: 'Nomor telepon sudah terdaftar' };
-    if (!data.name.trim()) return { success: false, error: 'Nama tidak boleh kosong' };
-    // Email optional or just valid if present
-    if (data.email && !data.email.includes('@')) return { success: false, error: 'Format email tidak valid' };
-    if (data.password.length < 6) return { success: false, error: 'Password minimal 6 karakter' };
-    if (!data.phone || data.phone.length < 10) return { success: false, error: 'Nomor telepon tidak valid' };
-    const newUser: RegisteredUser = {
-      ...data,
-      avatar: data.role === 'expert'
-        ? 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&h=200&fit=crop&crop=face'
-        : 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
+    try {
+      const authResponse = await loginMobileUser(phone.trim(), password);
+      const backendUser = await getMobileUserProfile(authResponse.accessToken);
+      const normalizedUser = normalizeBackendUser(backendUser);
+
+      setAuthToken(authResponse.accessToken);
+      setUserState(normalizedUser);
+      setIsLoggedIn(true);
+      persistSession({
+        accessToken: authResponse.accessToken,
+        user: normalizedUser,
+      });
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Login gagal',
+      };
+    }
+  }, [persistSession]);
+
+  const register = useCallback(async (_data: RegisteredUser): Promise<AuthResult> => {
+    const phoneError = validateIndonesianMobilePhone(_data.phone);
+    if (phoneError) {
+      return { success: false, error: phoneError };
+    }
+
+    const passwordError = validatePassword(_data.password, { minLength: 6 });
+    if (passwordError) {
+      return { success: false, error: passwordError };
+    }
+
+    return {
+      success: false,
+      error: 'Registrasi backend masih memakai OTP WhatsApp 3 langkah dan belum diintegrasikan di aplikasi ini.',
     };
-    const updated = [...registeredUsers, newUser];
-    setRegisteredUsers(updated);
-    Storage.setItem('registeredUsers', JSON.stringify(updated));
-    // Auto login
-    const { password: _, ...profile } = newUser;
-    setUserState(profile);
-    setIsLoggedIn(true);
-    Storage.setItem('session', JSON.stringify(profile));
-    return { success: true };
-  }, [registeredUsers]);
+  }, []);
 
   const logout = useCallback(() => {
+    setAuthToken(null);
     setIsLoggedIn(false);
     setUserState(guestUser);
-    Storage.removeItem('session');
-  }, []);
+    clearSession();
+  }, [clearSession]);
 
   const setUser = useCallback((u: UserProfile) => {
     setUserState(u);
-    if (isLoggedIn) Storage.setItem('session', JSON.stringify(u));
-  }, [isLoggedIn]);
+    if (isLoggedIn && authToken) {
+      persistSession({ accessToken: authToken, user: u });
+    }
+  }, [authToken, isLoggedIn, persistSession]);
 
   const updateStatus = useCallback((status: UserProfile['status']) => {
     setUserState(prev => {
       const updated = { ...prev, status };
-      if (isLoggedIn) Storage.setItem('session', JSON.stringify(updated));
+      if (isLoggedIn && authToken) {
+        persistSession({ accessToken: authToken, user: updated });
+      }
       return updated;
     });
-  }, [isLoggedIn]);
+  }, [authToken, isLoggedIn, persistSession]);
 
   // Cart
   const addToCart = useCallback((item: CartItem) => {
@@ -436,17 +476,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   // Orders
-  const addOrder = useCallback((order: Order) => {
-    setOrders(prev => { const o = [order, ...prev]; Storage.setItem('orders', JSON.stringify(o)); return o; });
+  const addOrder = useCallback((order: Order, options?: { silent?: boolean }) => {
+    const createdNewOrder = !orders.some(item => item.id === order.id);
+
+    setOrders(prev => {
+      const existingIndex = prev.findIndex(item => item.id === order.id);
+      const nextOrders = existingIndex >= 0
+        ? prev.map(item => item.id === order.id ? { ...item, ...order } : item)
+        : [order, ...prev];
+
+      Storage.setItem('orders', JSON.stringify(nextOrders));
+      return nextOrders;
+    });
+
+    if (!createdNewOrder || options?.silent) {
+      return;
+    }
+
     const notif: Notification = {
       id: `n_${Date.now()}`,
       title: order.type === 'consultation' ? 'Konsultasi Dibuat' : 'Pesanan Dibuat',
       message: order.type === 'consultation'
         ? `Konsultasi dengan ${order.expertName} berhasil dibuat. Silakan lakukan pembayaran.`
-        : `Pesanan #${order.id} berhasil dibuat. Total: Rp ${order.totalAmount.toLocaleString('id-ID')}`,
+        : `Pesanan #${order.orderCode || order.id} berhasil dibuat. Total: Rp ${order.totalAmount.toLocaleString('id-ID')}`,
       type: order.type === 'consultation' ? 'consultation' : 'order', read: false, createdAt: new Date().toISOString(),
     };
     setNotifications(prev => { const n = [notif, ...prev]; Storage.setItem('notifications', JSON.stringify(n)); return n; });
+  }, [orders]);
+  const patchOrder = useCallback((orderId: string, patch: Partial<Order>) => {
+    setOrders(prev => {
+      const o = prev.map(x => x.id === orderId ? { ...x, ...patch } : x);
+      Storage.setItem('orders', JSON.stringify(o));
+      return o;
+    });
   }, []);
   const updateOrderStatus = useCallback((orderId: string, status: Order['status']) => {
     setOrders(prev => { const o = prev.map(x => x.id === orderId ? { ...x, status } : x); Storage.setItem('orders', JSON.stringify(o)); return o; });
@@ -455,7 +517,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders(prev => { const o = prev.map(x => x.id === orderId ? { ...x, paymentMethod: method, status: 'paid' as const } : x); Storage.setItem('orders', JSON.stringify(o)); return o; });
   }, []);
   const getDraftOrder = useCallback(() => {
-    return orders.find(o => o.status === 'draft');
+    return orders.find(
+      (o) =>
+        o.type === 'product' &&
+        (o.status === 'draft' || o.status === 'pending_payment'),
+    );
   }, [orders]);
 
   // Notifications
@@ -483,11 +549,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
-      isLoggedIn, user, setUser, updateStatus, login, register, logout, registeredUsers,
+      isAuthHydrating, isLoggedIn, authToken, user, setUser, updateStatus, login, register, logout,
       isOnboarded, setIsOnboarded: handleSetOnboarded, hasAcceptedTerms, setHasAcceptedTerms: handleSetHasAcceptedTerms,
       cart, addToCart, removeFromCart, updateCartQuantity, clearCart, getCartTotal, getCartCount,
       addresses, addAddress, removeAddress, setDefaultAddress,
-      orders, addOrder, updateOrderStatus, updateOrderPayment, getDraftOrder,
+      orders, addOrder, patchOrder, updateOrderStatus, updateOrderPayment, getDraftOrder,
       notifications, addNotification, markNotificationRead, markAllNotificationsRead, getUnreadCount,
       wishlist, toggleWishlist,
       transactions,

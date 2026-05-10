@@ -1,65 +1,171 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
-import { PRODUCTS, PRODUCT_CATEGORIES } from '../../data/products';
 import ProductCard from '../../components/ProductCard';
 import SearchBar from '../../components/SearchBar';
 import { useApp } from '../../context/AppContext';
-
-const { width } = Dimensions.get('window');
+import {
+  getMobileProductCategories,
+  getMobileProducts,
+  resolveProductCategorySlug,
+} from '../../lib/products';
+import { Product, ProductCategory } from '../../types/product';
 
 const SORT_OPTIONS = [
   { id: 'popular', name: 'Terlaris' },
   { id: 'newest', name: 'Terbaru' },
   { id: 'price_low', name: 'Harga Terendah' },
   { id: 'price_high', name: 'Harga Tertinggi' },
-  { id: 'rating', name: 'Rating Tertinggi' },
 ];
+
+const STATIC_CATEGORY_OPTIONS: ProductCategory[] = [
+  {
+    id: 'all',
+    name: 'Semua',
+    slug: 'all',
+    icon: 'apps',
+    color: '#607D8B',
+    bg: '#ECEFF1',
+  },
+];
+
+function resolveCatalogCategory(
+  category: string | undefined,
+  categories: ProductCategory[],
+) {
+  if (!category) {
+    return 'all';
+  }
+
+  const normalizedSlug = resolveProductCategorySlug(category);
+
+  return categories.some((item) => item.slug === normalizedSlug)
+    ? normalizedSlug
+    : 'all';
+}
 
 export default function CatalogScreen() {
   const router = useRouter();
   const { category } = useLocalSearchParams<{ category?: string }>();
   const { getCartCount } = useApp();
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(category || 'all');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('popular');
   const [showSort, setShowSort] = useState(false);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    if (category && PRODUCT_CATEGORIES.some((item) => item.id === category)) {
-      setSelectedCategory(category);
-      return;
-    }
+    const timeout = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 350);
 
-    setSelectedCategory('all');
-  }, [category]);
+    return () => clearTimeout(timeout);
+  }, [search]);
 
-  const filteredProducts = useMemo(() => {
-    let result = [...PRODUCTS];
-    const featuredRealProducts = PRODUCTS.filter((p) => p.id.startsWith('rp'));
-    
-    if (selectedCategory === 'flash_sale') {
-      result = [...featuredRealProducts].filter(p => p.originalPrice).sort((a, b) => (b.originalPrice! - b.price) - (a.originalPrice! - a.price));
-    } else if (selectedCategory === 'promo') {
-      result = featuredRealProducts.filter(p => p.originalPrice);
-    } else if (selectedCategory !== 'all') {
-      result = result.filter(p => p.category === selectedCategory);
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter(p => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q));
-    }
-    // Sorting logic (menggunakan casting + untuk menghindari TS error aritmatika)
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCategories = async () => {
+      try {
+        const response = await getMobileProductCategories();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setCategories(response);
+      } catch {
+        if (isMounted) {
+          setCategories([]);
+        }
+      }
+    };
+
+    void loadCategories();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setSelectedCategory(resolveCatalogCategory(category, categories));
+  }, [category, categories]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const selectedBackendCategory =
+      selectedCategory !== 'all'
+        ? categories.find((item) => item.slug === selectedCategory)
+        : undefined;
+
+    const loadProducts = async () => {
+      try {
+        setLoading(true);
+
+        const response = await getMobileProducts({
+          page: 1,
+          perPage: 60,
+          search: debouncedSearch || undefined,
+          productCategoryId: selectedBackendCategory?.id,
+        });
+
+        if (!isMounted) {
+          return;
+        }
+
+        setProducts(response.products);
+        setError(null);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setProducts([]);
+        setError('Produk belum dapat dimuat dari backend.');
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadProducts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [categories, debouncedSearch, reloadKey, selectedCategory]);
+
+  const visibleProducts = useMemo(() => {
+    let result = [...products];
+
     switch (sortBy) {
       case 'popular': result.sort((a, b) => b.sold - a.sold); break;
-      case 'price_low': result.sort((a, b) => +a.price - +b.price); break;
-      case 'price_high': result.sort((a, b) => +b.price - +a.price); break;
-      case 'rating': result.sort((a, b) => b.rating - a.rating); break;
+      case 'newest':
+        result.sort(
+          (a, b) =>
+            new Date(b.createdAt || 0).getTime() -
+            new Date(a.createdAt || 0).getTime(),
+        );
+        break;
+      case 'price_low': result.sort((a, b) => a.price - b.price); break;
+      case 'price_high': result.sort((a, b) => b.price - a.price); break;
     }
+
     return result;
-  }, [search, selectedCategory, sortBy]);
+  }, [products, selectedCategory, sortBy]);
+
+  const categoryOptions = [...STATIC_CATEGORY_OPTIONS, ...categories];
+  const isRefreshing = loading && products.length > 0;
 
   return (
     <View style={styles.container}>
@@ -88,25 +194,25 @@ export default function CatalogScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.catScrollContent}
         >
-          {PRODUCT_CATEGORIES.map((cat) => (
+          {categoryOptions.map((cat) => (
             <TouchableOpacity
-              key={cat.id}
+              key={cat.slug}
               style={[
                 styles.catChip,
                 { backgroundColor: cat.bg, borderColor: cat.color },
-                selectedCategory === cat.id && { backgroundColor: cat.color }
+                selectedCategory === cat.slug && { backgroundColor: cat.color }
               ]}
-              onPress={() => setSelectedCategory(cat.id)}
+              onPress={() => setSelectedCategory(cat.slug)}
             >
               <Ionicons
                 name={cat.icon as any}
                 size={16}
-                color={selectedCategory === cat.id ? COLORS.white : cat.color}
+                color={selectedCategory === cat.slug ? COLORS.white : cat.color}
               />
               <Text style={[
                 styles.catChipText,
                 { color: cat.color },
-                selectedCategory === cat.id && { color: '#FFFFFF' }
+                selectedCategory === cat.slug && { color: '#FFFFFF' }
               ]}>
                 {cat.name}
               </Text>
@@ -117,7 +223,7 @@ export default function CatalogScreen() {
 
       {/* 3. FILTER & SORT BAR */}
       <View style={styles.filterBar}>
-        <Text style={styles.resultCount}>{filteredProducts.length} Produk ditemukan</Text>
+        <Text style={styles.resultCount}>{visibleProducts.length} Produk ditemukan</Text>
         <TouchableOpacity style={styles.sortBtn} onPress={() => setShowSort(!showSort)}>
           <Ionicons name="funnel-outline" size={14} color={COLORS.primary} />
           <Text style={styles.sortBtnText}>{SORT_OPTIONS.find(s => s.id === sortBy)?.name}</Text>
@@ -128,23 +234,46 @@ export default function CatalogScreen() {
       {/* 4. PRODUCT LIST */}
       <View style={{ flex: 1 }}>
         <FlatList
-          data={filteredProducts}
+          data={visibleProducts}
           keyExtractor={(item) => item.id}
           key={'3cols'}
           numColumns={3}
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.columnWrapper}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => setReloadKey((current) => current + 1)}
+              tintColor={COLORS.primary}
+            />
+          }
           renderItem={({ item }) => (
             <View style={styles.cardWrapper}>
               <ProductCard product={item} fullWidth />
             </View>
           )}
+          ListHeaderComponent={
+            loading && products.length === 0 ? (
+              <View style={styles.loadingWrap}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.loadingText}>Memuat produk...</Text>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <Ionicons name="search-outline" size={48} color={COLORS.textLight} />
-              <Text style={styles.emptyText}>Produk tidak ditemukan</Text>
-            </View>
+            !loading ? (
+              <View style={styles.empty}>
+                <Ionicons
+                  name={error ? 'cloud-offline-outline' : 'search-outline'}
+                  size={48}
+                  color={COLORS.textLight}
+                />
+                <Text style={styles.emptyText}>
+                  {error || 'Produk tidak ditemukan'}
+                </Text>
+              </View>
+            ) : null
           }
         />
 
@@ -287,6 +416,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingTop: 5,
     paddingBottom: 40
+  },
+  loadingWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 18,
+    paddingBottom: 10,
+    gap: SPACING.sm,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
   },
   columnWrapper: {
     gap: SPACING.sm,

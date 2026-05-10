@@ -50,31 +50,4 @@ export const getRequiredPackagingByProductId = (productId: string) => {
 export const isPackagingProduct = (productId: string) =>
   PACKAGING_PRODUCTS.some((item) => item.id === productId);
 
-export const getMissingPackagingForCart = (cart: CartItem[]) => {
-  const packagingNeeds = cart.reduce((acc, item) => {
-    if (isPackagingProduct(item.productId)) return acc;
-
-    const packagingProduct = getRequiredPackagingByProductId(item.productId);
-    if (!packagingProduct) return acc;
-
-    const existing = acc[packagingProduct.id];
-    const requiredQuantity = (existing?.requiredQuantity || 0) + item.quantity;
-
-    acc[packagingProduct.id] = {
-      packagingProduct,
-      requiredQuantity,
-    };
-    return acc;
-  }, {} as Record<string, { packagingProduct: NonNullable<ReturnType<typeof getRequiredPackagingByProductId>>; requiredQuantity: number }>);
-
-  return Object.values(packagingNeeds)
-    .map(({ packagingProduct, requiredQuantity }) => {
-      const existingPackagingQty = cart.find((item) => item.productId === packagingProduct.id)?.quantity || 0;
-      const missingQuantity = Math.max(0, requiredQuantity - existingPackagingQty);
-
-      return missingQuantity > 0
-        ? { packagingProduct, missingQuantity }
-        : undefined;
-    })
-    .filter(Boolean) as Array<{ packagingProduct: NonNullable<ReturnType<typeof getRequiredPackagingByProductId>>; missingQuantity: number }>;
-};
+export const getMissingPackagingForCart = (_cart: CartItem[]) => [];

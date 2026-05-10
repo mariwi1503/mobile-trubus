@@ -4,29 +4,37 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
+import { getOrderDisplayCode } from '../lib/order-display';
 
 export default function OrderSuccessScreen() {
   const router = useRouter();
-  const { orderId, type } = useLocalSearchParams();
+  const { allowPaymentAction, orderId, status, type } = useLocalSearchParams();
   const { orders } = useApp();
 
   const order = orders.find(o => o.id === orderId);
   const isConsultation = type === 'consultation';
-  const isDraft = order?.status === 'draft';
+  const resolvedStatus = typeof status === 'string' ? status : order?.status;
+  const isAwaitingPayment = resolvedStatus === 'draft' || resolvedStatus === 'pending_payment';
   const isCoinRedemption = Boolean(order?.coinRedemptionCost);
+  const shouldOfferPaymentAction = allowPaymentAction !== 'false' && isAwaitingPayment;
+  const displayOrderCode = getOrderDisplayCode(order, typeof orderId === 'string' ? orderId : undefined);
 
-  const iconName = isDraft ? 'time' : 'checkmark';
-  const iconBg = isDraft ? '#FFF3E0' : COLORS.primaryBg;
-  const iconInnerBg = isDraft ? COLORS.accentOrange : COLORS.primary;
-  const title = isDraft
-    ? 'Pesanan Menunggu Pembayaran'
+  const iconName = isAwaitingPayment ? 'time' : 'checkmark';
+  const iconBg = isAwaitingPayment ? '#FFF3E0' : COLORS.primaryBg;
+  const iconInnerBg = isAwaitingPayment ? COLORS.accentOrange : COLORS.primary;
+  const title = isAwaitingPayment
+    ? isConsultation
+      ? 'Konsultasi Berhasil Dibuat'
+      : 'Pesanan Menunggu Pembayaran'
     : isCoinRedemption
     ? 'Penukaran Berhasil!'
     : isConsultation
     ? 'Konsultasi Berhasil!'
     : 'Pembayaran Berhasil!';
-  const subtitle = isDraft
-    ? 'Pesananmu sudah kami catat. Segera selesaikan pembayaran agar pesanan dapat diproses.'
+  const subtitle = isAwaitingPayment
+    ? isConsultation
+      ? 'Jadwal konsultasi Anda sudah kami catat. Pembayaran akan kita lanjutkan di tahap berikutnya.'
+      : 'Pesananmu sudah kami catat. Segera selesaikan pembayaran agar pesanan dapat diproses.'
     : isCoinRedemption
     ? 'Hadiah dari Trubus Coin sedang kami proses. Kami akan memberi notifikasi saat pesanan siap dikirim atau diambil.'
     : isConsultation
@@ -46,16 +54,20 @@ export default function OrderSuccessScreen() {
         <Text style={styles.subtitle}>{subtitle}</Text>
 
         <View style={styles.orderIdCard}>
-          <Text style={styles.orderIdLabel}>ID Pesanan</Text>
-          <Text style={styles.orderIdValue}>{orderId}</Text>
+          <Text style={styles.orderIdLabel}>Kode Pesanan</Text>
+          <Text style={styles.orderIdValue}>{displayOrderCode}</Text>
         </View>
 
         <View style={styles.infoCard}>
-          {isDraft ? (
+          {isAwaitingPayment ? (
             <>
               <View style={styles.infoRow}>
                 <Ionicons name="alert-circle-outline" size={18} color={COLORS.accentOrange} />
-                <Text style={styles.infoText}>Selesaikan pembayaran dalam 24 jam</Text>
+                <Text style={styles.infoText}>
+                  {isConsultation
+                    ? 'Pesanan konsultasi sudah tersimpan dan siap dilanjutkan ke tahap pembayaran.'
+                    : 'Selesaikan pembayaran dalam 24 jam'}
+                </Text>
               </View>
               <View style={styles.infoRow}>
                 <Ionicons name="shield-checkmark-outline" size={18} color={COLORS.primary} />
@@ -78,7 +90,7 @@ export default function OrderSuccessScreen() {
       </View>
 
       <View style={styles.bottomSection}>
-        {isDraft && (
+        {shouldOfferPaymentAction && (
           <TouchableOpacity
             style={styles.payBtn}
             onPress={() => router.push({ pathname: '/payment', params: { orderId: orderId as string } })}

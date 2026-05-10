@@ -1,12 +1,12 @@
 {
   "expo": {
     "name": "Halo Trubus",
-    "slug": "agriculture-consultation-shopping",
+    "slug": "halo-trubus",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
-    "scheme": "agriculture-consultation-shopping",
-    "userInterfaceStyle": "automatic",
+    "scheme": "halo-trubus",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true

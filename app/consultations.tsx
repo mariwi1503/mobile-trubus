@@ -1,15 +1,27 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+    ActivityIndicator,
+    FlatList,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
-import { useApp } from '../context/AppContext';
+import { Order, useApp } from '../context/AppContext';
 import { EXPERTS } from '../data/experts';
+import { getMobileConsultations } from '../lib/consultations';
+import { Consultation } from '../types/consultation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
     draft: { label: 'Menunggu Pembayaran', color: '#FF9800', bg: '#FFF3E0' },
     pending_payment: { label: 'Menunggu Pembayaran', color: '#FF9800', bg: '#FFF3E0' },
+    expired: { label: 'Tidak Valid', color: '#8D6E63', bg: '#EFEBE9' },
     paid: { label: 'Terjadwal', color: '#2196F3', bg: '#E3F2FD' },
     completed: { label: 'Selesai', color: '#4CAF50', bg: '#E8F5E9' },
     cancelled: { label: 'Dibatalkan', color: '#F44336', bg: '#FFEBEE' },
@@ -38,19 +50,68 @@ export default function ConsultationsScreen({
     title?: string;
 }) {
     const router = useRouter();
-    const { orders, user } = useApp();
+    const { authToken, isLoggedIn, orders, user } = useApp();
     const insets = useSafeAreaInsets();
     const [selectedFilter, setSelectedFilter] = useState('all');
+    const [remoteConsultations, setRemoteConsultations] = useState<Consultation[]>([]);
+    const [remoteLoading, setRemoteLoading] = useState(false);
+    const [remoteError, setRemoteError] = useState<string | null>(null);
     const isExpertUser = user.role === 'expert';
+    const isUsingRemoteConsultations = !isExpertUser && isLoggedIn && Boolean(authToken);
 
-    const consultations = orders.filter(o => o.type === 'consultation');
+    const localConsultations = orders.filter(o => o.type === 'consultation');
+    const consultations = useMemo(() => {
+        if (isExpertUser) {
+            return localConsultations;
+        }
+
+        if (isUsingRemoteConsultations) {
+            return remoteConsultations;
+        }
+
+        return [];
+    }, [isExpertUser, isUsingRemoteConsultations, localConsultations, remoteConsultations]);
+
+    const loadRemoteConsultations = useCallback(async () => {
+        if (!authToken || !isUsingRemoteConsultations) {
+            return;
+        }
+
+        try {
+            setRemoteLoading(true);
+            const response = await getMobileConsultations(authToken);
+            setRemoteConsultations(response);
+            setRemoteError(null);
+        } catch (loadError) {
+            setRemoteConsultations([]);
+            setRemoteError(
+                loadError instanceof Error
+                    ? loadError.message
+                    : 'Riwayat konsultasi belum dapat dimuat.',
+            );
+        } finally {
+            setRemoteLoading(false);
+        }
+    }, [authToken, isUsingRemoteConsultations]);
+
+    useEffect(() => {
+        if (!isUsingRemoteConsultations) {
+            setRemoteConsultations([]);
+            setRemoteError(null);
+            setRemoteLoading(false);
+            return;
+        }
+
+        void loadRemoteConsultations();
+    }, [isUsingRemoteConsultations, loadRemoteConsultations]);
+
     const expertConsultations = useMemo(() => {
         if (!isExpertUser) return consultations;
         if (mode === 'active') {
             return consultations.filter((item) => ['draft', 'pending_payment', 'paid'].includes(item.status));
         }
         if (mode === 'history') {
-            return consultations.filter((item) => ['completed', 'cancelled', 'delivered'].includes(item.status));
+            return consultations.filter((item) => ['completed', 'cancelled', 'expired', 'delivered'].includes(item.status));
         }
         return consultations;
     }, [consultations, isExpertUser, mode]);
@@ -72,6 +133,7 @@ export default function ConsultationsScreen({
     );
 
     const activeFilters = mode === 'history' ? EXPERT_HISTORY_FILTERS : EXPERT_FILTERS;
+    const isEmpty = (isExpertUser ? expertConsultations : consultations).length === 0;
 
     return (
         <View style={[styles.container, { paddingBottom: insets.bottom }]}>
@@ -85,7 +147,12 @@ export default function ConsultationsScreen({
                 <View style={{ width: 22 }} />
             </View>
 
-            {(isExpertUser ? expertConsultations : consultations).length === 0 ? (
+            {remoteLoading && !isExpertUser && consultations.length === 0 ? (
+                <View style={styles.empty}>
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                    <Text style={styles.emptySubtext}>Memuat riwayat konsultasi...</Text>
+                </View>
+            ) : isEmpty ? (
                 <View style={styles.empty}>
                     <Ionicons name="chatbubbles-outline" size={48} color={COLORS.textLight} />
                     <Text style={styles.emptyTitle}>
@@ -100,7 +167,11 @@ export default function ConsultationsScreen({
                             ? mode === 'history'
                                 ? 'Riwayat konsultasi selesai atau closed akan muncul di sini.'
                                 : 'Konsultasi yang aktif atau akan datang akan muncul di sini.'
-                            : 'Mulai konsultasi dengan ahli pertanian sekarang!'}
+                            : remoteError
+                            ? remoteError
+                            : isUsingRemoteConsultations
+                            ? 'Pesanan konsultasi yang berhasil dibuat akan muncul di sini.'
+                            : 'Login lalu mulai konsultasi dengan ahli pertanian sekarang!'}
                     </Text>
                     {!isExpertUser && (
                         <TouchableOpacity style={styles.startBtn} onPress={() => router.push('/(tabs)/experts')}>
@@ -113,6 +184,12 @@ export default function ConsultationsScreen({
                     data={filteredConsultations}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingBottom: 20 }}
+                    refreshing={remoteLoading}
+                    onRefresh={() => {
+                        if (isUsingRemoteConsultations) {
+                            void loadRemoteConsultations();
+                        }
+                    }}
                     ListHeaderComponent={isExpertUser ? (
                         <View style={styles.filterSection}>
                             <Text style={styles.filterTitle}>Filter Chat</Text>
@@ -149,27 +226,32 @@ export default function ConsultationsScreen({
                             <Text style={styles.emptyFilteredTitle}>Tidak ada chat pada filter ini</Text>
                             <Text style={styles.emptyFilteredText}>Coba pilih filter lain untuk melihat konsultasi.</Text>
                         </View>
+                    ) : remoteError ? (
+                        <View style={styles.emptyFiltered}>
+                            <Ionicons name="alert-circle-outline" size={28} color="#B45309" />
+                            <Text style={styles.emptyFilteredTitle}>Riwayat belum bisa dimuat</Text>
+                            <Text style={styles.emptyFilteredText}>{remoteError}</Text>
+                        </View>
                     ) : null}
-                    renderItem={({ item }) => {
+                    renderItem={({ item }: { item: Consultation | Order }) => {
                         const status = STATUS_MAP[item.status] || STATUS_MAP.pending_payment;
-                        const expert = EXPERTS.find(e => e.id === item.expertId);
+                        const expert = 'expertId' in item ? EXPERTS.find(e => e.id === item.expertId) : undefined;
                         const date = item.consultationDate ? new Date(item.consultationDate) : new Date(item.createdAt);
                         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+                        const isRemoteItem = isUsingRemoteConsultations;
+                        const expertViewItem = item as Order;
+                        const canRetryPayment = item.status === 'pending_payment' || item.status === 'draft';
 
                         return (
                             <TouchableOpacity
                                 activeOpacity={0.9}
                                 onPress={() => {
                                     if (isExpertUser) {
-                                        // Expert always goes to chat
                                         router.push(`/chat/${item.id}`);
-                                    } else {
-                                        // Consumer logic
-                                        if (item.status === 'paid' || item.status === 'completed') {
-                                            router.push(`/chat/${item.id}`);
-                                        } else if (item.status === 'pending_payment' || item.status === 'draft') {
-                                            router.push({ pathname: '/payment', params: { orderId: item.id } });
-                                        }
+                                    } else if (canRetryPayment) {
+                                        router.push({ pathname: '/payment', params: { orderId: item.id } });
+                                    } else if (!isRemoteItem && (item.status === 'paid' || item.status === 'completed')) {
+                                        router.push(`/chat/${item.id}`);
                                     }
                                 }}
                             >
@@ -177,12 +259,12 @@ export default function ConsultationsScreen({
                                     <View style={styles.cardTop}>
                                         <View style={styles.expertRow}>
                                             <Image
-                                                source={{ uri: isExpertUser ? (item.clientAvatar || 'https://ui-avatars.com/api/?name=User') : expert?.image }}
+                                                source={{ uri: isExpertUser ? (expertViewItem.clientAvatar || 'https://ui-avatars.com/api/?name=User') : (item.expertImage || expert?.image || 'https://ui-avatars.com/api/?name=Ahli') }}
                                                 style={{ width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: COLORS.border }}
                                             />
                                             <View style={styles.expertInfo}>
-                                                <Text style={styles.expertName}>{isExpertUser ? (item.clientName || 'Klien') : (item.expertName || 'Ahli')}</Text>
-                                                <Text style={styles.expertSpec}>{isExpertUser ? 'Klien Konsultasi' : (expert?.specialization || 'Konsultasi Pertanian')}</Text>
+                                                <Text style={styles.expertName}>{isExpertUser ? (expertViewItem.clientName || 'Klien') : (item.expertName || 'Ahli')}</Text>
+                                                <Text style={styles.expertSpec}>{isExpertUser ? 'Klien Konsultasi' : (item.expertSpecialization || expert?.specialization || 'Konsultasi Pertanian')}</Text>
                                             </View>
                                         </View>
                                         <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
@@ -206,15 +288,28 @@ export default function ConsultationsScreen({
                                     </View>
 
                                     {!isExpertUser && (
-                                        <View style={styles.cardFooter}>
-                                            <Text style={styles.feeAmount}>Rp {item.totalAmount.toLocaleString('id-ID')}</Text>
-                                            {item.status === 'pending_payment' || item.status === 'draft' ? (
+                                    <View style={styles.cardFooter}>
+                                        <Text style={styles.feeAmount}>Rp {item.totalAmount.toLocaleString('id-ID')}</Text>
+                                            {canRetryPayment ? (
                                                 <TouchableOpacity
                                                     style={styles.payBtn}
                                                     onPress={() => router.push({ pathname: '/payment', params: { orderId: item.id } })}
                                                 >
                                                     <Text style={styles.payBtnText}>Bayar</Text>
                                                 </TouchableOpacity>
+                                            ) : isRemoteItem ? (
+                                                <View
+                                                    style={styles.chatBtn}
+                                                >
+                                                    <Ionicons
+                                                        name="information-circle-outline"
+                                                        size={16}
+                                                        color={COLORS.primary}
+                                                    />
+                                                    <Text style={styles.chatBtnText}>
+                                                        Fitur lanjutan menyusul
+                                                    </Text>
+                                                </View>
                                             ) : (
                                                 <TouchableOpacity
                                                     style={styles.chatBtn}
@@ -315,6 +410,12 @@ const styles = StyleSheet.create({
     payBtn: {
         backgroundColor: COLORS.primary, borderRadius: RADIUS.sm,
         paddingHorizontal: 16, paddingVertical: 8,
+    },
+    infoBtn: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        backgroundColor: COLORS.background, borderRadius: RADIUS.sm,
+        paddingHorizontal: 16, paddingVertical: 8,
+        borderWidth: 1, borderColor: COLORS.border,
     },
     payBtnText: { color: COLORS.white, fontSize: 13, fontWeight: '700' },
     chatBtn: {

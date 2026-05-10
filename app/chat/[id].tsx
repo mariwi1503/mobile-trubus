@@ -29,6 +29,9 @@ export default function ChatScreen() {
 
     const order = orders.find(o => o.id === id);
     const expert = EXPERTS.find(e => e.id === order?.expertId);
+    const expertDisplayName = order?.expertName || expert?.name || 'Ahli';
+    const expertDisplayImage = order?.expertImage || expert?.image || 'https://ui-avatars.com/api/?name=Ahli';
+    const expertIsOnline = expert?.isOnline ?? true;
 
     const [messages, setMessages] = useState(MOCK_MESSAGES);
     const [inputText, setInputText] = useState('');
@@ -107,7 +110,7 @@ export default function ChatScreen() {
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }, [messages]);
 
-    if (!order || !expert) return null;
+    if (!order) return null;
 
     return (
         <KeyboardAvoidingView
@@ -125,12 +128,12 @@ export default function ChatScreen() {
 
                 <View style={styles.expertInfo}>
                     <View style={styles.avatarContainer}>
-                        <Image source={{ uri: expert.image }} style={styles.avatar} />
-                        <View style={[styles.onlineDot, { backgroundColor: expert.isOnline ? COLORS.success : COLORS.textLight }]} />
+                        <Image source={{ uri: expertDisplayImage }} style={styles.avatar} />
+                        <View style={[styles.onlineDot, { backgroundColor: expertIsOnline ? COLORS.success : COLORS.textLight }]} />
                     </View>
                     <View style={{ marginLeft: 10 }}>
-                        <Text style={styles.expertName}>{expert.name}</Text>
-                        <Text style={styles.expertStatus}>{expert.isOnline ? 'Online' : 'Offline'}</Text>
+                        <Text style={styles.expertName}>{expertDisplayName}</Text>
+                        <Text style={styles.expertStatus}>{expertIsOnline ? 'Online' : 'Offline'}</Text>
                     </View>
                 </View>
             </View>

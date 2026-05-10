@@ -1,17 +1,20 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Animated, Modal } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Animated, Modal, Linking, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, RADIUS, SHADOWS, SPACING, CARD_WIDTH } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
-import { EXPERTS } from '../../data/experts';
-import { PRODUCTS } from '../../data/products';
-import { ARTICLES } from '../../data/articles';
 import ProductCard from '../../components/ProductCard';
 import ExpertCard from '../../components/ExpertCard';
 import ArticleCard from '../../components/ArticleCard';
+import { getMobileArticles } from '../../lib/articles';
+import { getMobileExperts } from '../../lib/experts';
+import { Article } from '../../types/article';
+import { getMobileProducts } from '../../lib/products';
+import { Expert } from '../../types/expert';
+import { Product } from '../../types/product';
 
 const QUICK_MENU = [
   { id: '1', name: 'Bibit', icon: 'leaf', color: '#4CAF50', bg: '#E8F5E9', route: '/(tabs)/catalog', params: { category: 'bibit' } },
@@ -23,8 +26,96 @@ const QUICK_MENU = [
   { id: '7', name: 'Konsultasi', icon: 'people', color: '#2196F3', bg: '#E3F2FD', route: '/(tabs)/experts' },
   { id: '8', name: 'Edukasi', icon: 'book-outline', color: '#9C27B0', bg: '#F3E5F5', route: '/(tabs)/catalog', params: { category: 'edukasi' } },
   { id: '9', name: 'Paket Tani', icon: 'cube', color: '#009688', bg: '#E0F2F1', route: '/(tabs)/catalog' },
-  { id: '10', name: 'Promo', icon: 'pricetag', color: '#E91E63', bg: '#FCE4EC', route: '/(tabs)/catalog', params: { category: 'promo' } },
+  { id: '10', name: 'Semua', icon: 'pricetag', color: '#E91E63', bg: '#FCE4EC', route: '/(tabs)/catalog' },
 ];
+
+type MobileInterstitialAdResponse = {
+  id: string;
+  campaignName: string;
+  title: string;
+  description: string | null;
+  imageUrl: string;
+  redirectUrl: string | null;
+  altText: string | null;
+  delayMs: number;
+  isActive: boolean;
+  isPortalEnabled: boolean;
+  isMobileEnabled: boolean;
+};
+
+const MOBILE_API_BASE_URL = (
+  process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:5000'
+).replace(/\/$/, '');
+
+const MOBILE_INTERSTITIAL_API_URL = `${MOBILE_API_BASE_URL}/api/v1/mobile/interstitial-ad`;
+
+const normalizeInterstitialAdPayload = (
+  payload: unknown,
+): MobileInterstitialAdResponse | null => {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  if ('data' in payload) {
+    const nestedPayload = (payload as { data?: unknown }).data;
+    return normalizeInterstitialAdPayload(nestedPayload ?? null);
+  }
+
+  const candidate = payload as Partial<MobileInterstitialAdResponse>;
+
+  if (
+    typeof candidate.id !== 'string' ||
+    typeof candidate.imageUrl !== 'string' ||
+    typeof candidate.title !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    id: candidate.id,
+    campaignName: candidate.campaignName ?? candidate.title,
+    title: candidate.title,
+    description: candidate.description ?? null,
+    imageUrl: candidate.imageUrl,
+    redirectUrl: candidate.redirectUrl ?? null,
+    altText: candidate.altText ?? null,
+    delayMs: typeof candidate.delayMs === 'number' ? candidate.delayMs : 1000,
+    isActive: candidate.isActive ?? true,
+    isPortalEnabled: candidate.isPortalEnabled ?? true,
+    isMobileEnabled: candidate.isMobileEnabled ?? true,
+  };
+};
+
+async function loadHomeProductsData() {
+  const response = await getMobileProducts({
+    page: 1,
+    perPage: 24,
+  });
+
+  const products = response.products;
+
+  return {
+    featuredProducts: products.slice(0, 6),
+    popularProducts: [...products]
+      .sort((left, right) => right.sold - left.sold)
+      .slice(0, 6),
+  };
+}
+
+async function loadHomeArticlesData() {
+  const response = await getMobileArticles({ page: 1, perPage: 3 });
+  return response.articles;
+}
+
+async function loadHomeExpertsData() {
+  const response = await getMobileExperts({
+    page: 1,
+    perPage: 6,
+    isActive: true,
+  });
+
+  return response.experts.slice(0, 6);
+}
 
 function ConsumerHomeScreen() {
   const router = useRouter();
@@ -32,13 +123,140 @@ function ConsumerHomeScreen() {
   const { user, getCartCount, getUnreadCount } = useApp();
 
   const [interstitialVisible, setInterstitialVisible] = useState(false);
+  const [interstitialAd, setInterstitialAd] =
+    useState<MobileInterstitialAdResponse | null>(null);
+  const [latestArticles, setLatestArticles] = useState<Article[]>([]);
+  const [onlineExperts, setOnlineExperts] = useState<Expert[]>([]);
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [popularProducts, setPopularProducts] = useState<Product[]>([]);
+  const [articlesLoading, setArticlesLoading] = useState(true);
+  const [expertsLoading, setExpertsLoading] = useState(true);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [articlesError, setArticlesError] = useState<string | null>(null);
+  const [expertsError, setExpertsError] = useState<string | null>(null);
+  const [productsError, setProductsError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
 
-  React.useEffect(() => {
-    setInterstitialVisible(true);
+  useEffect(() => {
+    let isMounted = true;
+    let showInterstitialTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const loadInterstitialAd = async () => {
+      try {
+        const response = await fetch(MOBILE_INTERSTITIAL_API_URL, {
+          headers: {
+            Accept: 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = normalizeInterstitialAdPayload(await response.json());
+
+        if (
+          !isMounted ||
+          !payload?.isActive ||
+          !payload.isMobileEnabled ||
+          !payload.imageUrl
+        ) {
+          return;
+        }
+
+        setInterstitialAd(payload);
+        showInterstitialTimer = setTimeout(() => {
+          if (isMounted) {
+            setInterstitialVisible(true);
+          }
+        }, payload.delayMs ?? 1000);
+      } catch {
+        return;
+      }
+    };
+
+    void loadInterstitialAd();
+
+    return () => {
+      isMounted = false;
+      if (showInterstitialTimer) {
+        clearTimeout(showInterstitialTimer);
+      }
+    };
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProducts = async () => {
+      try {
+        const nextData = await loadHomeProductsData();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setFeaturedProducts(nextData.featuredProducts);
+        setPopularProducts(nextData.popularProducts);
+        setProductsError(null);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setFeaturedProducts([]);
+        setPopularProducts([]);
+        setProductsError('Produk belum dapat dimuat dari backend.');
+      } finally {
+        if (isMounted) {
+          setProductsLoading(false);
+        }
+      }
+    };
+
+    void loadProducts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadExperts = async () => {
+      try {
+        const nextExperts = await loadHomeExpertsData();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setOnlineExperts(nextExperts);
+        setExpertsError(null);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setOnlineExperts([]);
+        setExpertsError('Ahli belum dapat dimuat dari backend.');
+      } finally {
+        if (isMounted) {
+          setExpertsLoading(false);
+        }
+      }
+    };
+
+    void loadExperts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.05, duration: 1200, useNativeDriver: true }),
@@ -47,17 +265,97 @@ function ConsumerHomeScreen() {
     ).start();
   }, []);
 
-  const onlineExperts = EXPERTS.filter(e => e.isOnline).slice(0, 6);
-  const featuredRealProducts = PRODUCTS.filter((p) => p.id.startsWith('rp'));
-  const promoProducts = featuredRealProducts.filter(p => p.originalPrice).slice(0, 6);
-  const popularProducts = [...PRODUCTS].sort((a, b) => b.sold - a.sold).slice(0, 6);
-  const latestArticles = ARTICLES.slice(0, 3);
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadLatestArticles = async () => {
+      try {
+        const nextArticles = await loadHomeArticlesData();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setLatestArticles(nextArticles);
+        setArticlesError(null);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setArticlesError('Artikel terbaru belum dapat dimuat.');
+      } finally {
+        if (isMounted) {
+          setArticlesLoading(false);
+        }
+      }
+    };
+
+    void loadLatestArticles();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleInterstitialPress = async () => {
+    setInterstitialVisible(false);
+
+    const redirectUrl = interstitialAd?.redirectUrl?.trim();
+
+    if (!redirectUrl) {
+      return;
+    }
+
+    if (redirectUrl.startsWith('/')) {
+      router.push(redirectUrl as any);
+      return;
+    }
+
+    await Linking.openURL(redirectUrl);
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+
+    try {
+      const [productsResult, articlesResult, expertsResult] = await Promise.allSettled([
+        loadHomeProductsData(),
+        loadHomeArticlesData(),
+        loadHomeExpertsData(),
+      ]);
+
+      if (productsResult.status === 'fulfilled') {
+        setFeaturedProducts(productsResult.value.featuredProducts);
+        setPopularProducts(productsResult.value.popularProducts);
+        setProductsError(null);
+      } else {
+        setProductsError('Produk belum dapat dimuat dari backend.');
+      }
+
+      if (articlesResult.status === 'fulfilled') {
+        setLatestArticles(articlesResult.value);
+        setArticlesError(null);
+      } else {
+        setArticlesError('Artikel terbaru belum dapat dimuat.');
+      }
+
+      if (expertsResult.status === 'fulfilled') {
+        setOnlineExperts(expertsResult.value);
+        setExpertsError(null);
+      } else {
+        setExpertsError('Ahli belum dapat dimuat dari backend.');
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const firstName = user.name?.trim()?.split(' ')[0] || 'Sahabat';
 
   return (
     <View style={styles.container}>
       <Modal
-        visible={interstitialVisible}
+        visible={interstitialVisible && Boolean(interstitialAd?.imageUrl)}
         transparent
         animationType="fade"
         onRequestClose={() => setInterstitialVisible(false)}
@@ -72,10 +370,21 @@ function ConsumerHomeScreen() {
               <Ionicons name="close" size={20} color={COLORS.text} />
             </TouchableOpacity>
 
-            <Image
-              source={require('../../assets/images/interstitial.png')}
-              style={styles.interstitialImage}
-            />
+            {interstitialAd?.imageUrl ? (
+              <TouchableOpacity
+                activeOpacity={interstitialAd.redirectUrl ? 0.96 : 1}
+                disabled={!interstitialAd.redirectUrl}
+                onPress={() => {
+                  void handleInterstitialPress();
+                }}
+              >
+                <Image
+                  source={{ uri: interstitialAd.imageUrl }}
+                  accessibilityLabel={interstitialAd.altText || interstitialAd.title}
+                  style={styles.interstitialImage}
+                />
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
       </Modal>
@@ -117,7 +426,20 @@ function ConsumerHomeScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              void handleRefresh();
+            }}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+          />
+        }
+      >
         {/* Consult Expert CTA */}
         <View style={{ paddingHorizontal: SPACING.lg, marginTop: SPACING.lg, marginBottom: SPACING.sm }}>
           <View style={[styles.ctaContainer, { position: 'relative' }]}>
@@ -193,27 +515,53 @@ function ConsumerHomeScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={CARD_WIDTH + SPACING.md} decelerationRate="fast" snapToAlignment="start" contentContainerStyle={{ paddingHorizontal: SPACING.lg }}>
-            {onlineExperts.map((expert) => (
-              <ExpertCard key={expert.id} expert={expert} />
-            ))}
+            {expertsLoading && onlineExperts.length === 0 ? (
+              <View style={styles.productStatusCard}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.productStatusText}>Memuat ahli...</Text>
+              </View>
+            ) : onlineExperts.length > 0 ? (
+              onlineExperts.map((expert) => (
+                <ExpertCard key={expert.id} expert={expert} />
+              ))
+            ) : (
+              <View style={styles.productStatusCard}>
+                <Text style={styles.productStatusText}>
+                  {expertsError || 'Belum ada ahli yang tersedia.'}
+                </Text>
+              </View>
+            )}
           </ScrollView>
         </View>
 
-        {/* Promo Products */}
+        {/* Latest Products */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="pricetag" size={18} color={COLORS.primary} />
-              <Text style={[styles.sectionTitle, { marginLeft: 4 }]}>Promo Spesial</Text>
+              <Text style={[styles.sectionTitle, { marginLeft: 4 }]}>Produk Terbaru</Text>
             </View>
             <TouchableOpacity onPress={() => router.push('/(tabs)/catalog')}>
               <Text style={styles.seeAll}>Lihat Semua</Text>
             </TouchableOpacity>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={CARD_WIDTH + SPACING.md} decelerationRate="fast" snapToAlignment="start" contentContainerStyle={{ paddingHorizontal: SPACING.lg }}>
-            {promoProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
+            {productsLoading && featuredProducts.length === 0 ? (
+              <View style={styles.productStatusCard}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.productStatusText}>Memuat produk...</Text>
+              </View>
+            ) : featuredProducts.length > 0 ? (
+              featuredProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))
+            ) : (
+              <View style={styles.productStatusCard}>
+                <Text style={styles.productStatusText}>
+                  {productsError || 'Belum ada produk yang tersedia.'}
+                </Text>
+              </View>
+            )}
           </ScrollView>
         </View>
 
@@ -226,9 +574,22 @@ function ConsumerHomeScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={CARD_WIDTH + SPACING.md} decelerationRate="fast" snapToAlignment="start" contentContainerStyle={{ paddingHorizontal: SPACING.lg }}>
-            {popularProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
+            {productsLoading && popularProducts.length === 0 ? (
+              <View style={styles.productStatusCard}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.productStatusText}>Memuat produk terlaris...</Text>
+              </View>
+            ) : popularProducts.length > 0 ? (
+              popularProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))
+            ) : (
+              <View style={styles.productStatusCard}>
+                <Text style={styles.productStatusText}>
+                  {productsError || 'Belum ada produk yang tersedia.'}
+                </Text>
+              </View>
+            )}
           </ScrollView>
         </View>
 
@@ -241,9 +602,22 @@ function ConsumerHomeScreen() {
             </TouchableOpacity>
           </View>
           <View style={{ paddingHorizontal: SPACING.lg }}>
-            {latestArticles.map((article, index) => (
-              <ArticleCard key={article.id} article={article} featured={index === 0} />
-            ))}
+            {articlesLoading && latestArticles.length === 0 ? (
+              <View style={styles.articleStatus}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.articleStatusText}>Memuat artikel terbaru...</Text>
+              </View>
+            ) : latestArticles.length > 0 ? (
+              latestArticles.map((article, index) => (
+                <ArticleCard key={article.id} article={article} featured={index === 0} />
+              ))
+            ) : (
+              <View style={styles.articleStatus}>
+                <Text style={styles.articleStatusText}>
+                  {articlesError || 'Belum ada artikel yang tersedia.'}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -355,6 +729,37 @@ const styles = StyleSheet.create({
   },
   notifBadgeText: { color: COLORS.white, fontSize: 9, fontWeight: '800' },
   scrollView: { flex: 1 },
+  articleStatus: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    ...SHADOWS.small,
+  },
+  articleStatusText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  productStatusCard: {
+    width: CARD_WIDTH * 2.2,
+    minHeight: 124,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    ...SHADOWS.small,
+  },
+  productStatusText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
   section: { marginVertical: SPACING.md },
   sectionPadded: { marginTop: SPACING.lg, paddingHorizontal: SPACING.lg },
   sectionHeader: {
