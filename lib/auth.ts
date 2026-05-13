@@ -15,6 +15,21 @@ type PasswordValidationOptions = {
   minLength?: number;
 };
 
+export type MobileConsumerGender = 'MALE' | 'FEMALE';
+
+export type MobileRegisterOtpValidationResponse = {
+  registrationToken: string;
+};
+
+export type RegisterMobileCustomerPayload = {
+  registrationToken: string;
+  email: string;
+  firstName: string;
+  lastName?: string;
+  gender: MobileConsumerGender;
+  password: string;
+};
+
 function formatErrorMessage(payload: unknown, status: number) {
   if (!payload || typeof payload !== 'object') {
     return `Request failed with ${status}`;
@@ -59,6 +74,35 @@ export function validateIndonesianMobilePhone(phone: string) {
   return null;
 }
 
+export function normalizeIndonesianMobilePhone(phone: string) {
+  const digitsOnly = phone.trim().replace(/[^0-9]/g, '');
+
+  if (!digitsOnly) {
+    return '';
+  }
+
+  if (digitsOnly.startsWith('0')) {
+    return `62${digitsOnly.slice(1)}`;
+  }
+
+  return digitsOnly;
+}
+
+export function validateEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    return 'Email wajib diisi';
+  }
+
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailPattern.test(normalizedEmail)) {
+    return 'Format email tidak valid';
+  }
+
+  return null;
+}
+
 export function validatePassword(
   password: string,
   options: PasswordValidationOptions = {},
@@ -79,9 +123,11 @@ export function validatePassword(
 
 export type BackendMobileAuthResponse = {
   accessToken: string;
+  accountType: 'consumer' | 'expert';
 };
 
-export type BackendMobileUser = {
+type BackendMobileConsumerProfile = {
+  accountType: 'consumer';
   id: string;
   createdAt: string;
   updatedAt: string;
@@ -93,6 +139,32 @@ export type BackendMobileUser = {
   gender: 'MALE' | 'FEMALE';
   status: 'ACTIVE' | 'BANNED';
 };
+
+type BackendMobileExpertProfile = {
+  accountType: 'expert';
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+  name: string;
+  email: string;
+  phone: string;
+  status: 'ACTIVE' | 'BANNED';
+  presenceStatus: 'online' | 'busy' | 'offline';
+  specialization: string;
+  experience: number;
+  rating: number;
+  totalConsultations: number;
+  bio: string;
+  price: number;
+  isActive: boolean;
+  imageOriginalUrl?: string | null;
+  imageThumbnailUrl?: string | null;
+};
+
+export type BackendMobileProfile =
+  | BackendMobileConsumerProfile
+  | BackendMobileExpertProfile;
 
 function buildHeaders(init?: RequestInit) {
   const headers = new Headers(init?.headers);
@@ -110,9 +182,21 @@ function buildHeaders(init?: RequestInit) {
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const rawText = await response.text();
-  const payload = rawText ? (JSON.parse(rawText) as ApiEnvelope<T> | T) : null;
+  let payload: ApiEnvelope<T> | T | string | null = null;
+
+  if (rawText) {
+    try {
+      payload = JSON.parse(rawText) as ApiEnvelope<T> | T;
+    } catch {
+      payload = rawText;
+    }
+  }
 
   if (!response.ok) {
+    if (typeof payload === 'string') {
+      throw new Error(payload.trim() || `Request failed with ${response.status}`);
+    }
+
     throw new Error(formatErrorMessage(payload, response.status));
   }
 
@@ -140,15 +224,65 @@ export async function loginMobileUser(phone: string, password: string) {
     '/api/v1/mobile/auth/login',
     {
       method: 'POST',
-      body: JSON.stringify({ phone, password }),
+      body: JSON.stringify({
+        phone: normalizeIndonesianMobilePhone(phone),
+        password,
+      }),
     },
   );
 }
 
+export async function requestMobileRegistrationOtp(phone: string) {
+  return requestMobileApi<void>('/api/v1/mobile/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({
+      phone: normalizeIndonesianMobilePhone(phone),
+    }),
+  });
+}
+
+export async function verifyMobileRegistrationOtp(phone: string, otp: string) {
+  return requestMobileApi<MobileRegisterOtpValidationResponse>(
+    '/api/v1/mobile/auth/register/otp-validation',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        phone: normalizeIndonesianMobilePhone(phone),
+        otp: otp.trim(),
+      }),
+    },
+  );
+}
+
+export async function registerMobileCustomer(
+  payload: RegisterMobileCustomerPayload,
+) {
+  return requestMobileApi<BackendMobileProfile>('/api/v1/mobile/auth/register/data', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getMobileUserProfile(accessToken: string) {
-  return requestMobileApi<BackendMobileUser>('/api/v1/mobile/users/profile', {
+  return requestMobileApi<BackendMobileProfile>('/api/v1/mobile/users/profile', {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
   });
+}
+
+export async function updateMobileExpertPresenceStatus(
+  accessToken: string,
+  presenceStatus: 'online' | 'busy' | 'offline',
+) {
+  return requestMobileApi<BackendMobileExpertProfile>(
+    '/api/v1/mobile/experts/profile/status',
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ presenceStatus }),
+    },
+  );
 }

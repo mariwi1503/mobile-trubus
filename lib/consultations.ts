@@ -24,6 +24,13 @@ type BackendConsultation = {
   contactPhone: string;
   createdAt: string;
   updatedAt: string;
+  user?: {
+    id: string;
+    firstName: string;
+    lastName?: string | null;
+    phone: string;
+    gender: 'MALE' | 'FEMALE';
+  };
   expert: {
     id: string;
     name: string;
@@ -143,6 +150,17 @@ function normalizeConsultation(consultation: BackendConsultation): Consultation 
   const { consultationDate, consultationTime } = formatScheduledDateParts(
     consultation.scheduledAt,
   );
+  const clientName = consultation.user
+    ? [consultation.user.firstName, consultation.user.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || 'Klien'
+    : undefined;
+  const clientAvatar = consultation.user
+    ? consultation.user.gender === 'FEMALE'
+      ? 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&h=200&fit=crop&crop=face'
+      : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face'
+    : undefined;
 
   return {
     id: consultation.orderCode,
@@ -167,6 +185,9 @@ function normalizeConsultation(consultation: BackendConsultation): Consultation 
     updatedAt: consultation.updatedAt,
     contactName: consultation.contactName,
     contactPhone: consultation.contactPhone,
+    clientName,
+    clientPhone: consultation.user?.phone,
+    clientAvatar,
   };
 }
 

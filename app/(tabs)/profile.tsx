@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -6,37 +6,164 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { useApp, RegisteredUser } from '../../context/AppContext';
 import { useAlert } from '../../context/AlertContext';
+import {
+  MobileConsumerGender,
+  requestMobileRegistrationOtp,
+  validateEmail,
+  validateIndonesianMobilePhone,
+  validatePassword,
+  verifyMobileRegistrationOtp,
+} from '../../lib/auth';
 
 const DEV_DEFAULT_LOGIN_PHONE = '6287861888809';
 const DEV_DEFAULT_LOGIN_PASSWORD = '@Password1';
+const OTP_RESEND_SECONDS = 180;
+const OTP_LENGTH = 6;
 
 // ─── Auth Modal ───────────────────────────────────────────────
 function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { login, register } = useApp();
   const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [registerStep, setRegisterStep] = useState<'phone' | 'otp' | 'profile'>('phone');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState(DEV_DEFAULT_LOGIN_PASSWORD);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState(DEV_DEFAULT_LOGIN_PHONE);
-  const [role, setRole] = useState<'consumer' | 'expert'>('consumer');
-  const [specialization, setSpecialization] = useState('');
+  const [otpDigits, setOtpDigits] = useState<string[]>(() =>
+    Array.from({ length: OTP_LENGTH }, () => ''),
+  );
+  const [gender, setGender] = useState<MobileConsumerGender>('MALE');
+  const [registrationToken, setRegistrationToken] = useState('');
+  const [otpResendCountdown, setOtpResendCountdown] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const otpInputRefs = useRef<Array<TextInput | null>>([]);
   const { showAlert } = useAlert();
+
+  useEffect(() => {
+    if (otpResendCountdown <= 0) {
+      return undefined;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setOtpResendCountdown((current) => current - 1);
+    }, 1000);
+
+    return () => clearTimeout(timeoutId);
+  }, [otpResendCountdown]);
 
   const reset = (nextMode: 'login' | 'register' = 'login') => {
     setMode(nextMode);
+    setRegisterStep('phone');
     setEmail('');
     setPassword(nextMode === 'login' ? DEV_DEFAULT_LOGIN_PASSWORD : '');
     setConfirmPassword('');
     setName('');
     setPhone(nextMode === 'login' ? DEV_DEFAULT_LOGIN_PHONE : '');
-    setRole('consumer');
-    setSpecialization('');
+    setOtpDigits(Array.from({ length: OTP_LENGTH }, () => ''));
+    setGender('MALE');
+    setRegistrationToken('');
+    setOtpResendCountdown(0);
     setShowPassword(false);
     setError('');
+  };
+
+  const closeModal = () => {
+    reset();
+    onClose();
+  };
+
+  const formatCountdown = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  const otpValue = otpDigits.join('');
+
+  const authHeroContent = (() => {
+    if (mode === 'login') {
+      return {
+        eyebrow: 'Halo Trubus Account',
+        title: 'Masuk untuk melanjutkan aktivitas Anda',
+        description: 'Pesanan, konsultasi, dan manfaat akun tersimpan rapi di satu tempat.',
+        icon: 'sparkles-outline' as const,
+      };
+    }
+
+    if (registerStep === 'phone') {
+      return {
+        eyebrow: 'Buat Akun',
+        title: 'Nomor aktif, akses lebih cepat',
+        description: 'Gunakan nomor WhatsApp Anda untuk memulai pengalaman yang aman dan personal.',
+        icon: 'phone-portrait-outline' as const,
+      };
+    }
+
+    if (registerStep === 'otp') {
+      return {
+        eyebrow: 'Konfirmasi Nomor',
+        title: 'Masukkan 6 digit kode verifikasi',
+        description: `Kode telah dikirim ke ${phone || 'nomor Anda'}.`,
+        icon: 'shield-checkmark-outline' as const,
+      };
+    }
+
+    return {
+      eyebrow: 'Profil Customer',
+      title: 'Selesaikan profil akun Anda',
+      description: 'Tambahkan identitas dasar agar akun siap dipakai di seluruh layanan Trubus.',
+      icon: 'person-circle-outline' as const,
+    };
+  })();
+
+  const focusOtpField = (index: number) => {
+    otpInputRefs.current[index]?.focus();
+  };
+
+  const handleOtpDigitChange = (value: string, index: number) => {
+    const sanitizedValue = value.replace(/\D/g, '');
+
+    if (!sanitizedValue) {
+      setOtpDigits((current) => {
+        const next = [...current];
+        next[index] = '';
+        return next;
+      });
+      return;
+    }
+
+    if (sanitizedValue.length > 1) {
+      const nextDigits = Array.from({ length: OTP_LENGTH }, (_, digitIndex) =>
+        sanitizedValue[digitIndex] ?? otpDigits[digitIndex] ?? '',
+      ).slice(0, OTP_LENGTH);
+
+      setOtpDigits(nextDigits);
+      focusOtpField(Math.min(sanitizedValue.length, OTP_LENGTH - 1));
+      return;
+    }
+
+    setOtpDigits((current) => {
+      const next = [...current];
+      next[index] = sanitizedValue;
+      return next;
+    });
+
+    if (index < OTP_LENGTH - 1) {
+      focusOtpField(index + 1);
+    }
+  };
+
+  const handleOtpKeyPress = (
+    event: { nativeEvent: { key: string } },
+    index: number,
+  ) => {
+    if (event.nativeEvent.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      focusOtpField(index - 1);
+    }
   };
 
   const handleLogin = async () => {
@@ -49,21 +176,90 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
     else setError(result.error || 'Login gagal');
   };
 
+  const handleRequestOtp = async () => {
+    setError('');
+    const phoneError = validateIndonesianMobilePhone(phone);
+    if (phoneError) { setError(phoneError); return; }
+
+    setIsSubmitting(true);
+    try {
+      await requestMobileRegistrationOtp(phone);
+      setRegisterStep('otp');
+      setOtpDigits(Array.from({ length: OTP_LENGTH }, () => ''));
+      setRegistrationToken('');
+      setOtpResendCountdown(OTP_RESEND_SECONDS);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'OTP gagal dikirim');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    setError('');
+    if (otpValue.trim().length !== OTP_LENGTH) { setError('Kode OTP harus 6 digit'); return; }
+
+    setIsSubmitting(true);
+    try {
+      const result = await verifyMobileRegistrationOtp(phone, otpValue);
+      setRegistrationToken(result.registrationToken);
+      setRegisterStep('profile');
+    } catch (verificationError) {
+      setError(verificationError instanceof Error ? verificationError.message : 'OTP tidak valid');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleRegister = async () => {
     setError('');
-    if (!name || !password || !confirmPassword || !phone) { setError('Nama, Telepon, dan Password wajib diisi'); return; }
+    if (!name || !email || !password || !confirmPassword || !phone) {
+      setError('Nama, Email, Telepon, dan Password wajib diisi');
+      return;
+    }
+
+    const emailError = validateEmail(email);
+    if (emailError) { setError(emailError); return; }
+
+    const passwordError = validatePassword(password, { minLength: 6 });
+    if (passwordError) { setError(passwordError); return; }
+
     if (password !== confirmPassword) { setError('Konfirmasi password tidak cocok'); return; }
-    if (role === 'expert' && !specialization) { setError('Spesialisasi wajib diisi untuk ahli'); return; }
+    if (!registrationToken) { setError('Sesi OTP sudah habis. Silakan verifikasi nomor HP lagi'); return; }
+
     const data: RegisteredUser = {
-      name, email, password, phone, role, avatar: '',
-      trubusCoins: 0,
-      ...(role === 'expert' ? { specialization, experience: 1, fee: 50000 } : {}),
+      name,
+      email,
+      password,
+      phone,
+      gender,
     };
+
     setIsSubmitting(true);
-    const result = await register(data);
+    const result = await register(data, registrationToken);
     setIsSubmitting(false);
     if (result.success) { reset(); onClose(); showAlert('Selamat!', 'Registrasi berhasil!'); }
     else setError(result.error || 'Registrasi gagal');
+  };
+
+  const handleResendOtp = async () => {
+    if (otpResendCountdown > 0 || isSubmitting) {
+      return;
+    }
+
+    await handleRequestOtp();
+  };
+
+  const handleBackToPhone = () => {
+    setError('');
+    setOtpDigits(Array.from({ length: OTP_LENGTH }, () => ''));
+    setRegistrationToken('');
+    setRegisterStep('phone');
+    setOtpResendCountdown(0);
+  };
+
+  const handleSwitchMode = () => {
+    reset(mode === 'login' ? 'register' : 'login');
   };
 
   return (
@@ -73,86 +269,266 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
           <View style={styles.modalHandle} />
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{mode === 'login' ? 'Masuk' : 'Daftar'}</Text>
-            <TouchableOpacity onPress={() => { reset(); onClose(); }}>
+            <TouchableOpacity onPress={closeModal}>
               <Ionicons name="close" size={24} color={COLORS.text} />
             </TouchableOpacity>
           </View>
 
-          {/* Logo */}
-          <View style={styles.logoRow}>
-            <Image source={require('../../assets/images/logo.png')} style={styles.logoSmall} resizeMode="contain" />
-            <Text style={styles.logoText}>Halo Trubus</Text>
-          </View>
-
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.authScrollContent}>
+            <LinearGradient
+              colors={['#143B29', '#2F7D32', '#8BCF7B']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.authHeroCard}
+            >
+              <View style={styles.authHeroGlow} />
+              <View style={styles.authHeroTopRow}>
+                <View style={styles.logoRow}>
+                  <Image source={require('../../assets/images/logo.png')} style={styles.logoSmall} resizeMode="contain" />
+                  <Text style={styles.logoText}>Halo Trubus</Text>
+                </View>
+                <View style={styles.authHeroIconWrap}>
+                  <Ionicons name={authHeroContent.icon} size={22} color={COLORS.white} />
+                </View>
+              </View>
+              <Text style={styles.authHeroEyebrow}>{authHeroContent.eyebrow}</Text>
+              <Text style={styles.authHeroTitle}>{authHeroContent.title}</Text>
+              <Text style={styles.authHeroDescription}>{authHeroContent.description}</Text>
+            </LinearGradient>
+
             {error ? <View style={styles.errorBox}><Ionicons name="alert-circle" size={16} color={COLORS.accent} /><Text style={styles.errorText}>{error}</Text></View> : null}
 
             {mode === 'register' && (
               <>
-                <View style={styles.infoBox}>
-                  <Ionicons name="information-circle" size={16} color={COLORS.primary} />
-                  <Text style={styles.infoText}>Registrasi backend masih mengikuti flow OTP WhatsApp dan belum aktif di aplikasi ini.</Text>
-                </View>
+                {registerStep === 'phone' && (
+                  <>
+                    <Text style={styles.inputLabel}>No. Telepon / WhatsApp</Text>
+                    <View style={styles.inputShell}>
+                      <View style={styles.inputIconWrap}>
+                        <Ionicons name="call-outline" size={18} color={COLORS.primaryDark} />
+                      </View>
+                      <TextInput
+                        style={styles.inputField}
+                        value={phone}
+                        onChangeText={setPhone}
+                        placeholder="08xxxxxxxxxx"
+                        placeholderTextColor={COLORS.textLight}
+                        keyboardType="phone-pad"
+                      />
+                    </View>
+                    <Text style={styles.hintText}>Nomor ini akan dipakai untuk masuk dan menerima pembaruan akun.</Text>
+                  </>
+                )}
 
-                <Text style={styles.inputLabel}>Nama Lengkap</Text>
-                <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Masukkan nama lengkap" placeholderTextColor={COLORS.textLight} />
+                {registerStep === 'otp' && (
+                  <>
+                    <View style={styles.otpSection}>
+                      <View style={styles.otpFieldRow}>
+                        {otpDigits.map((digit, index) => (
+                          <TextInput
+                            key={index}
+                            ref={(element) => {
+                              otpInputRefs.current[index] = element;
+                            }}
+                            style={[styles.otpInput, digit ? styles.otpInputFilled : null]}
+                            value={digit}
+                            onChangeText={(value) => handleOtpDigitChange(value, index)}
+                            onKeyPress={(event) => handleOtpKeyPress(event, index)}
+                            placeholder="•"
+                            placeholderTextColor="#B8C7B7"
+                            keyboardType="number-pad"
+                            textAlign="center"
+                            maxLength={index === 0 ? OTP_LENGTH : 1}
+                            autoFocus={index === 0}
+                          />
+                        ))}
+                      </View>
+                    </View>
+                    <View style={styles.inlineActionRow}>
+                      <TouchableOpacity onPress={handleBackToPhone} disabled={isSubmitting}>
+                        <Text style={styles.inlineActionText}>Ganti nomor</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={handleResendOtp} disabled={otpResendCountdown > 0 || isSubmitting}>
+                        <Text style={[styles.inlineActionText, otpResendCountdown > 0 && styles.inlineActionTextDisabled]}>
+                          {otpResendCountdown > 0 ? `Kirim ulang ${formatCountdown(otpResendCountdown)}` : 'Kirim ulang OTP'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
 
-                {/* Role Selection REMOVED */}
+                {registerStep === 'profile' && (
+                  <>
+                    <Text style={styles.inputLabel}>Nama Lengkap</Text>
+                    <View style={styles.inputShell}>
+                      <View style={styles.inputIconWrap}>
+                        <Ionicons name="person-outline" size={18} color={COLORS.primaryDark} />
+                      </View>
+                      <TextInput
+                        style={styles.inputField}
+                        value={name}
+                        onChangeText={setName}
+                        placeholder="Masukkan nama lengkap"
+                        placeholderTextColor={COLORS.textLight}
+                      />
+                    </View>
 
-                <Text style={styles.inputLabel}>No. Telepon</Text>
-                <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="08xxxxxxxxxx" placeholderTextColor={COLORS.textLight} keyboardType="phone-pad" />
+                    <Text style={styles.inputLabel}>Email</Text>
+                    <View style={styles.inputShell}>
+                      <View style={styles.inputIconWrap}>
+                        <Ionicons name="mail-outline" size={18} color={COLORS.primaryDark} />
+                      </View>
+                      <TextInput
+                        style={styles.inputField}
+                        value={email}
+                        onChangeText={setEmail}
+                        placeholder="email@contoh.com"
+                        placeholderTextColor={COLORS.textLight}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                      />
+                    </View>
 
-                <Text style={styles.inputLabel}>Email (Opsional)</Text>
-                <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="email@contoh.com" placeholderTextColor={COLORS.textLight} keyboardType="email-address" autoCapitalize="none" />
+                    <Text style={styles.inputLabel}>Jenis Kelamin</Text>
+                    <View style={styles.selectionRow}>
+                      {[
+                        { label: 'Laki-laki', value: 'MALE' as const, icon: 'man-outline' },
+                        { label: 'Perempuan', value: 'FEMALE' as const, icon: 'woman-outline' },
+                      ].map((option) => {
+                        const isActive = gender === option.value;
+
+                        return (
+                          <TouchableOpacity
+                            key={option.value}
+                            style={[styles.selectionBtn, isActive && styles.selectionBtnActive]}
+                            onPress={() => setGender(option.value)}
+                          >
+                            <Ionicons
+                              name={option.icon as any}
+                              size={16}
+                              color={isActive ? COLORS.white : COLORS.primary}
+                            />
+                            <Text style={[styles.selectionBtnText, isActive && styles.selectionBtnTextActive]}>
+                              {option.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    <Text style={styles.inputLabel}>Password</Text>
+                    <View style={styles.passwordRow}>
+                      <View style={styles.inputIconWrap}>
+                        <Ionicons name="lock-closed-outline" size={18} color={COLORS.primaryDark} />
+                      </View>
+                      <TextInput
+                        style={styles.passwordInput}
+                        value={password}
+                        onChangeText={setPassword}
+                        placeholder="Buat password"
+                        placeholderTextColor={COLORS.textLight}
+                        secureTextEntry={!showPassword}
+                      />
+                      <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                        <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={COLORS.textLight} />
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text style={styles.inputLabel}>Konfirmasi Password</Text>
+                    <View style={styles.passwordRow}>
+                      <View style={styles.inputIconWrap}>
+                        <Ionicons name="shield-checkmark-outline" size={18} color={COLORS.primaryDark} />
+                      </View>
+                      <TextInput
+                        style={styles.passwordInput}
+                        value={confirmPassword}
+                        onChangeText={setConfirmPassword}
+                        placeholder="Ulangi password Anda"
+                        placeholderTextColor={COLORS.textLight}
+                        secureTextEntry={!showPassword}
+                      />
+                    </View>
+
+                    <View style={styles.inlineActionRow}>
+                      <TouchableOpacity onPress={handleBackToPhone} disabled={isSubmitting}>
+                        <Text style={styles.inlineActionText}>Ulang verifikasi nomor</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
               </>
             )}
 
             {mode === 'login' && (
               <>
-                <View style={styles.infoBox}>
-                  <Ionicons name="code-working-outline" size={16} color={COLORS.primary} />
-                  <Text style={styles.infoText}>Default login development sudah terisi otomatis untuk testing.</Text>
+                <View style={styles.demoInfoCard}>
+                  <View style={styles.demoInfoIconWrap}>
+                    <Ionicons name="flask-outline" size={16} color={COLORS.primaryDark} />
+                  </View>
+                  <View style={styles.demoInfoContent}>
+                    <Text style={styles.demoInfoTitle}>Akun demo testing sudah terisi</Text>
+                    <Text style={styles.demoInfoText}>
+                      Nomor dan password default otomatis dimuat untuk kebutuhan QA.
+                    </Text>
+                  </View>
                 </View>
 
                 <Text style={styles.inputLabel}>No. Telepon</Text>
-                <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="08xxxxxxxxxx" placeholderTextColor={COLORS.textLight} keyboardType="phone-pad" />
+                <View style={styles.inputShell}>
+                  <View style={styles.inputIconWrap}>
+                    <Ionicons name="call-outline" size={18} color={COLORS.primaryDark} />
+                  </View>
+                  <TextInput style={styles.inputField} value={phone} onChangeText={setPhone} placeholder="08xxxxxxxxxx" placeholderTextColor={COLORS.textLight} keyboardType="phone-pad" />
+                </View>
               </>
             )}
 
-
-
-            <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.passwordRow}>
-              <TextInput style={styles.passwordInput} value={password} onChangeText={setPassword} placeholder="Minimal 6 karakter" placeholderTextColor={COLORS.textLight} secureTextEntry={!showPassword} />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
-                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={COLORS.textLight} />
-              </TouchableOpacity>
-            </View>
-
-            {mode === 'register' && (
+            {mode === 'login' && (
               <>
-                <Text style={styles.inputLabel}>Konfirmasi Password</Text>
+                <Text style={styles.inputLabel}>Password</Text>
                 <View style={styles.passwordRow}>
-                  <TextInput style={styles.passwordInput} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Ulangi password Anda" placeholderTextColor={COLORS.textLight} secureTextEntry={!showPassword} />
+                  <View style={styles.inputIconWrap}>
+                    <Ionicons name="lock-closed-outline" size={18} color={COLORS.primaryDark} />
+                  </View>
+                  <TextInput style={styles.passwordInput} value={password} onChangeText={setPassword} placeholder="Masukkan password" placeholderTextColor={COLORS.textLight} secureTextEntry={!showPassword} />
+                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                    <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={COLORS.textLight} />
+                  </TouchableOpacity>
                 </View>
               </>
             )}
 
             <TouchableOpacity
               style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
-              onPress={mode === 'login' ? handleLogin : handleRegister}
+              onPress={
+                mode === 'login'
+                  ? handleLogin
+                  : registerStep === 'phone'
+                    ? handleRequestOtp
+                    : registerStep === 'otp'
+                      ? handleVerifyOtp
+                      : handleRegister
+              }
               disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <ActivityIndicator size="small" color={COLORS.white} />
               ) : (
-                <Text style={styles.submitBtnText}>{mode === 'login' ? 'Masuk' : 'Daftar Sekarang'}</Text>
+                <Text style={styles.submitBtnText}>
+                  {mode === 'login'
+                    ? 'Masuk'
+                    : registerStep === 'phone'
+                      ? 'Kirim OTP'
+                      : registerStep === 'otp'
+                        ? 'Verifikasi OTP'
+                        : 'Buat Akun'}
+                </Text>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.switchMode}
-              onPress={() => { reset(mode === 'login' ? 'register' : 'login'); }}
+              onPress={handleSwitchMode}
               disabled={isSubmitting}
             >
               <Text style={styles.switchText}>
@@ -458,36 +834,55 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   // Auth Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: COLORS.white, borderTopLeftRadius: RADIUS.xxl, borderTopRightRadius: RADIUS.xxl, padding: SPACING.xl, maxHeight: '90%' },
-  authScrollContent: { paddingBottom: SPACING.lg },
-  modalHandle: { width: 40, height: 4, backgroundColor: COLORS.border, borderRadius: 2, alignSelf: 'center', marginBottom: 12 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  modalTitle: { fontSize: 22, fontWeight: '700', color: COLORS.text },
-  logoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  logoSmall: { width: 36, height: 36, marginRight: 8 },
-  logoText: { fontSize: 16, fontWeight: '700', color: COLORS.primaryDark },
-  errorBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFEBEE', borderRadius: RADIUS.sm, padding: 10, marginBottom: 12, gap: 6 },
-  errorText: { fontSize: 13, color: COLORS.accent, flex: 1 },
-  infoBox: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: COLORS.primaryBg, borderRadius: RADIUS.sm, padding: 10, marginBottom: 12, gap: 6 },
-  infoText: { fontSize: 13, color: COLORS.primaryDark, flex: 1, lineHeight: 18 },
-  inputLabel: { fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6, marginTop: 12 },
-  input: { backgroundColor: COLORS.background, borderRadius: RADIUS.sm, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border },
-  passwordRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.border },
-  passwordInput: { flex: 1, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: COLORS.text },
-  eyeBtn: { padding: 10 },
-  roleRow: { flexDirection: 'row', gap: 10 },
-  roleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.primary, backgroundColor: COLORS.white },
-  roleBtnActive: { backgroundColor: COLORS.primary },
-  roleBtnText: { fontSize: 13, fontWeight: '600', color: COLORS.primary },
-  roleBtnTextActive: { color: COLORS.white },
-  hintText: { fontSize: 11, color: COLORS.textLight, marginTop: 8, textAlign: 'center' },
-  submitBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, paddingVertical: 16, alignItems: 'center', marginTop: 20 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(11, 29, 20, 0.44)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#FCFEF9', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: SPACING.xl, maxHeight: '92%' },
+  authScrollContent: { paddingBottom: SPACING.xl },
+  modalHandle: { width: 48, height: 5, backgroundColor: '#D7E2D0', borderRadius: RADIUS.full, alignSelf: 'center', marginBottom: 14 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  modalTitle: { fontSize: 22, fontWeight: '800', color: '#183624' },
+  logoRow: { flexDirection: 'row', alignItems: 'center' },
+  logoSmall: { width: 34, height: 34, marginRight: 8 },
+  logoText: { fontSize: 15, fontWeight: '700', color: COLORS.white },
+  authHeroCard: { borderRadius: 24, paddingHorizontal: 18, paddingVertical: 18, overflow: 'hidden', marginBottom: 16 },
+  authHeroGlow: { position: 'absolute', top: -38, right: -12, width: 132, height: 132, borderRadius: 66, backgroundColor: 'rgba(255,255,255,0.15)' },
+  authHeroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
+  authHeroIconWrap: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' },
+  authHeroEyebrow: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)', marginBottom: 8 },
+  authHeroTitle: { fontSize: 24, fontWeight: '800', lineHeight: 30, color: COLORS.white, marginBottom: 8 },
+  authHeroDescription: { fontSize: 13, lineHeight: 20, color: 'rgba(255,255,255,0.84)' },
+  errorBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF1F0', borderRadius: 18, padding: 12, marginBottom: 14, gap: 8, borderWidth: 1, borderColor: '#FFD6D2' },
+  errorText: { fontSize: 13, color: COLORS.accent, flex: 1, lineHeight: 18 },
+  demoInfoCard: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F2F8EF', borderRadius: 18, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#DCE9D7' },
+  demoInfoIconWrap: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#E4F1DE', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  demoInfoContent: { flex: 1 },
+  demoInfoTitle: { fontSize: 13, fontWeight: '700', color: '#244531', marginBottom: 2 },
+  demoInfoText: { fontSize: 12, lineHeight: 18, color: '#6A7F71' },
+  inputLabel: { fontSize: 13, fontWeight: '700', color: '#244531', marginBottom: 8, marginTop: 14 },
+  inputShell: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 18, borderWidth: 1, borderColor: '#D9E4D5', paddingHorizontal: 12, minHeight: 56, ...SHADOWS.small },
+  inputIconWrap: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#EEF7EB', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  inputField: { flex: 1, fontSize: 15, color: '#183624', paddingVertical: 14 },
+  passwordRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 18, borderWidth: 1, borderColor: '#D9E4D5', paddingHorizontal: 12, minHeight: 56, ...SHADOWS.small },
+  passwordInput: { flex: 1, fontSize: 15, color: '#183624', paddingVertical: 14 },
+  eyeBtn: { padding: 8 },
+  selectionRow: { flexDirection: 'row', gap: 10 },
+  selectionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: 18, borderWidth: 1.5, borderColor: '#B7D2B4', backgroundColor: COLORS.white },
+  selectionBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  selectionBtnText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
+  selectionBtnTextActive: { color: COLORS.white },
+  otpSection: { alignItems: 'center', marginTop: 10, marginBottom: 2 },
+  otpFieldRow: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
+  otpInput: { width: 46, height: 58, borderRadius: 18, backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: '#D7E3D3', fontSize: 24, fontWeight: '800', color: '#173523', ...SHADOWS.small },
+  otpInputFilled: { borderColor: COLORS.primary, backgroundColor: '#F4FBF1' },
+  inlineActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, gap: 12 },
+  inlineActionText: { fontSize: 13, color: COLORS.primaryDark, fontWeight: '700' },
+  inlineActionTextDisabled: { color: COLORS.textLight },
+  hintText: { fontSize: 12, color: '#6A7F71', marginTop: 10, lineHeight: 18 },
+  submitBtn: { backgroundColor: COLORS.primary, borderRadius: 18, paddingVertical: 17, alignItems: 'center', marginTop: 22, ...SHADOWS.medium },
   submitBtnDisabled: { opacity: 0.7 },
-  submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
-  switchMode: { alignItems: 'center', marginTop: 16 },
+  submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '800' },
+  switchMode: { alignItems: 'center', marginTop: 18 },
   switchText: { fontSize: 14, color: COLORS.textSecondary },
-  switchLink: { color: COLORS.primary, fontWeight: '700' },
+  switchLink: { color: COLORS.primaryDark, fontWeight: '800' },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.background, paddingHorizontal: SPACING.xl },
   loadingText: { marginTop: 12, color: COLORS.textSecondary, fontSize: 14 },
   // Guest

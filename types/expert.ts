@@ -18,6 +18,7 @@ export interface Expert {
   certifications: string[];
   languages: string[];
   isOnline: boolean;
+  presenceStatus?: 'online' | 'busy' | 'offline';
   availableSlots: ExpertSlot[];
   createdAt?: string;
   updatedAt?: string;

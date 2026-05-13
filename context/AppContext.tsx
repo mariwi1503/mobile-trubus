@@ -1,9 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
 import {
-  BackendMobileUser,
+  BackendMobileProfile,
   getMobileUserProfile,
   loginMobileUser,
+  MobileConsumerGender,
+  registerMobileCustomer,
+  validateEmail,
+  updateMobileExpertPresenceStatus,
   validateIndonesianMobilePhone,
   validatePassword,
 } from '../lib/auth';
@@ -74,7 +78,11 @@ export interface Transaction {
   amount: number; date: string; description: string;
   status: 'success' | 'failed' | 'pending';
 }
-export interface RegisteredUser extends UserProfile {
+export interface RegisteredUser {
+  name: string;
+  email: string;
+  phone: string;
+  gender: MobileConsumerGender;
   password: string;
 }
 
@@ -92,9 +100,9 @@ interface AppContextType {
   authToken: string | null;
   user: UserProfile;
   setUser: (user: UserProfile) => void;
-  updateStatus: (status: UserProfile['status']) => void; // Added updateStatus
+  updateStatus: (status: UserProfile['status']) => Promise<void>;
   login: (phone: string, password: string) => Promise<AuthResult>;
-  register: (data: RegisteredUser) => Promise<AuthResult>;
+  register: (data: RegisteredUser, registrationToken: string) => Promise<AuthResult>;
   logout: () => void;
   // Onboarding
   isOnboarded: boolean;
@@ -141,6 +149,7 @@ const guestUser: UserProfile = {
 const SESSION_STORAGE_KEY = 'session';
 const DEFAULT_MALE_AVATAR = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face';
 const DEFAULT_FEMALE_AVATAR = 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&h=200&fit=crop&crop=face';
+const DEFAULT_EXPERT_AVATAR = 'https://ui-avatars.com/api/?name=Ahli&background=E8F5E9&color=1B5E20&size=256';
 
 function formatPhoneForDisplay(phone: string) {
   if (phone.startsWith('62')) {
@@ -150,7 +159,42 @@ function formatPhoneForDisplay(phone: string) {
   return phone;
 }
 
-function normalizeBackendUser(user: BackendMobileUser): UserProfile {
+function fallbackExpertAvatar(name: string) {
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+    name || 'Ahli',
+  )}&background=E8F5E9&color=1B5E20&size=256`;
+}
+
+function splitFullName(name: string) {
+  const trimmedName = name.trim().replace(/\s+/g, ' ');
+  const [firstName, ...rest] = trimmedName.split(' ');
+
+  return {
+    firstName: firstName || '',
+    lastName: rest.length > 0 ? rest.join(' ') : undefined,
+  };
+}
+
+function normalizeBackendUser(user: BackendMobileProfile): UserProfile {
+  if (user.accountType === 'expert') {
+    return {
+      name: user.name || 'Ahli Trubus',
+      email: user.email || '',
+      phone: formatPhoneForDisplay(user.phone),
+      avatar:
+        user.imageThumbnailUrl ||
+        user.imageOriginalUrl ||
+        fallbackExpertAvatar(user.name) ||
+        DEFAULT_EXPERT_AVATAR,
+      role: 'expert',
+      trubusCoins: 0,
+      specialization: user.specialization,
+      experience: user.experience,
+      fee: user.price,
+      status: user.presenceStatus,
+    };
+  }
+
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
 
   return {
@@ -396,22 +440,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [persistSession]);
 
-  const register = useCallback(async (_data: RegisteredUser): Promise<AuthResult> => {
-    const phoneError = validateIndonesianMobilePhone(_data.phone);
+  const register = useCallback(async (data: RegisteredUser, registrationToken: string): Promise<AuthResult> => {
+    const phoneError = validateIndonesianMobilePhone(data.phone);
     if (phoneError) {
       return { success: false, error: phoneError };
     }
 
-    const passwordError = validatePassword(_data.password, { minLength: 6 });
+    if (!data.name.trim()) {
+      return { success: false, error: 'Nama lengkap wajib diisi' };
+    }
+
+    const emailError = validateEmail(data.email);
+    if (emailError) {
+      return { success: false, error: emailError };
+    }
+
+    const passwordError = validatePassword(data.password, { minLength: 6 });
     if (passwordError) {
       return { success: false, error: passwordError };
     }
 
-    return {
-      success: false,
-      error: 'Registrasi backend masih memakai OTP WhatsApp 3 langkah dan belum diintegrasikan di aplikasi ini.',
-    };
-  }, []);
+    if (!registrationToken.trim()) {
+      return { success: false, error: 'Sesi verifikasi nomor HP tidak ditemukan' };
+    }
+
+    const { firstName, lastName } = splitFullName(data.name);
+    if (!firstName) {
+      return { success: false, error: 'Nama depan wajib diisi' };
+    }
+
+    try {
+      await registerMobileCustomer({
+        registrationToken: registrationToken.trim(),
+        email: data.email.trim().toLowerCase(),
+        firstName,
+        lastName,
+        gender: data.gender,
+        password: data.password,
+      });
+
+      const authResponse = await loginMobileUser(data.phone.trim(), data.password);
+      const backendUser = await getMobileUserProfile(authResponse.accessToken);
+      const normalizedUser = normalizeBackendUser(backendUser);
+
+      setAuthToken(authResponse.accessToken);
+      setUserState(normalizedUser);
+      setIsLoggedIn(true);
+      persistSession({
+        accessToken: authResponse.accessToken,
+        user: normalizedUser,
+      });
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Registrasi gagal',
+      };
+    }
+  }, [persistSession]);
 
   const logout = useCallback(() => {
     setAuthToken(null);
@@ -427,7 +514,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [authToken, isLoggedIn, persistSession]);
 
-  const updateStatus = useCallback((status: UserProfile['status']) => {
+  const updateStatus = useCallback(async (status: UserProfile['status']) => {
     setUserState(prev => {
       const updated = { ...prev, status };
       if (isLoggedIn && authToken) {
@@ -435,7 +522,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return updated;
     });
-  }, [authToken, isLoggedIn, persistSession]);
+
+    if (!status || !isLoggedIn || !authToken || user.role !== 'expert') {
+      return;
+    }
+
+    try {
+      const backendExpert = await updateMobileExpertPresenceStatus(
+        authToken,
+        status,
+      );
+      const normalizedUser = normalizeBackendUser(backendExpert);
+      setUserState(normalizedUser);
+      persistSession({ accessToken: authToken, user: normalizedUser });
+    } catch {
+      // Keep the optimistic status locally when the backend update fails.
+    }
+  }, [authToken, isLoggedIn, persistSession, user.role]);
 
   // Cart
   const addToCart = useCallback((item: CartItem) => {

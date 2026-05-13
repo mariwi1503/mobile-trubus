@@ -57,19 +57,15 @@ export default function ConsultationsScreen({
     const [remoteLoading, setRemoteLoading] = useState(false);
     const [remoteError, setRemoteError] = useState<string | null>(null);
     const isExpertUser = user.role === 'expert';
-    const isUsingRemoteConsultations = !isExpertUser && isLoggedIn && Boolean(authToken);
+    const isUsingRemoteConsultations = isLoggedIn && Boolean(authToken);
 
     const localConsultations = orders.filter(o => o.type === 'consultation');
     const consultations = useMemo(() => {
-        if (isExpertUser) {
-            return localConsultations;
-        }
-
         if (isUsingRemoteConsultations) {
             return remoteConsultations;
         }
 
-        return [];
+        return isExpertUser ? localConsultations : [];
     }, [isExpertUser, isUsingRemoteConsultations, localConsultations, remoteConsultations]);
 
     const loadRemoteConsultations = useCallback(async () => {

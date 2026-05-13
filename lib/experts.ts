@@ -20,6 +20,7 @@ type ApiEnvelope<T> = {
 type BackendExpert = {
   id: string;
   name: string;
+  presenceStatus?: 'online' | 'busy' | 'offline';
   specialization: string;
   experience: number;
   rating: number;
@@ -127,7 +128,8 @@ function normalizeExpert(expert: BackendExpert): Expert {
     education: 'Informasi pendidikan akan segera diperbarui.',
     certifications: [],
     languages: ['Indonesia'],
-    isOnline: expert.isActive,
+    isOnline: expert.presenceStatus === 'online',
+    presenceStatus: expert.presenceStatus || 'offline',
     availableSlots: generateUpcomingSlots(),
     createdAt: expert.createdAt,
     updatedAt: expert.updatedAt,

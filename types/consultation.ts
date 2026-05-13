@@ -23,4 +23,7 @@ export interface Consultation {
   updatedAt: string;
   contactName: string;
   contactPhone: string;
+  clientName?: string;
+  clientPhone?: string;
+  clientAvatar?: string;
 }
