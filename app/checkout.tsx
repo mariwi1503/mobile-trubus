@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ImageSourcePropType } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -76,6 +76,25 @@ export default function CheckoutScreen() {
     () => checkoutItems.reduce((sum, item) => sum + item.weight * item.quantity, 0),
     [checkoutItems]
   );
+
+  useEffect(() => {
+    if (!addresses.length) {
+      setSelectedAddressId('');
+      return;
+    }
+
+    const currentSelectionStillExists = addresses.some(
+      (address) => address.id === selectedAddressId,
+    );
+
+    if (currentSelectionStillExists) {
+      return;
+    }
+
+    setSelectedAddressId(
+      addresses.find((address) => address.isDefault)?.id || addresses[0]?.id || '',
+    );
+  }, [addresses, selectedAddressId]);
 
   const handleOrder = () => {
     if (isRewardCheckout && user.trubusCoins < rewardCoinCost) {

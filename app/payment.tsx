@@ -113,13 +113,16 @@ function buildShippingAddress(order: Order) {
   }
 
   const { firstName, lastName } = splitFullName(order.address.recipient);
+  const streetAddress = [order.address.address, order.address.additional]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join(', ');
 
   return {
     firstName,
     lastName: lastName || undefined,
     email: '',
     phone: order.address.phone,
-    address: order.address.address,
+    address: streetAddress || order.address.address,
     city: order.address.city,
     postalCode: order.address.postalCode,
     countryCode: 'IDN',

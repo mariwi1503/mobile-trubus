@@ -44,6 +44,7 @@ export default function RootLayout() {
           <Stack.Screen name="consultations" />
           <Stack.Screen name="notifications" />
           <Stack.Screen name="addresses" />
+          <Stack.Screen name="address-form" />
           <Stack.Screen name="article/[id]" />
         </Stack>
       </AlertProvider>

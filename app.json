@@ -9,7 +9,10 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Lokasi digunakan untuk membantu mengisi provinsi, kota, kecamatan, dan kelurahan saat menambahkan alamat."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +22,9 @@
       "edgeToEdgeEnabled": false,
       "package": "com.trubus.app",
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -36,6 +41,12 @@
           "imageWidth": 800,
           "resizeMode": "cover",
           "backgroundColor": "#ffffff"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Lokasi digunakan untuk membantu mengisi provinsi, kota, kecamatan, dan kelurahan saat menambahkan alamat."
         }
       ],
       "expo-image-picker"

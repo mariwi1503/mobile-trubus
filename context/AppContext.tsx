@@ -11,6 +11,14 @@ import {
   validateIndonesianMobilePhone,
   validatePassword,
 } from '../lib/auth';
+import type { Address } from '../types/address';
+import {
+  createMobileUserAddress,
+  deleteMobileUserAddress,
+  getMobileUserAddresses,
+  type CreateMobileUserAddressPayload,
+  updateMobileUserAddress,
+} from '../lib/addresses';
 
 const Storage = {
   getItem: async (key: string): Promise<string | null> => {
@@ -38,10 +46,7 @@ export interface CartItem {
   productId: string; name: string; price: number; image: any;
   quantity: number; weight: number; store: string;
 }
-export interface Address {
-  id: string; label: string; recipient: string; phone: string;
-  address: string; city: string; province: string; postalCode: string; isDefault: boolean;
-}
+export type { Address } from '../types/address';
 export interface Order {
   id: string; type: 'product' | 'consultation'; items?: CartItem[];
   orderCode?: string;
@@ -119,9 +124,11 @@ interface AppContextType {
   getCartCount: () => number;
   // Addresses
   addresses: Address[];
-  addAddress: (address: Address) => void;
-  removeAddress: (id: string) => void;
-  setDefaultAddress: (id: string) => void;
+  isAddressesLoading: boolean;
+  refreshAddresses: () => Promise<void>;
+  createAddress: (payload: CreateMobileUserAddressPayload) => Promise<Address>;
+  removeAddress: (id: string) => Promise<void>;
+  setDefaultAddress: (id: string) => Promise<void>;
   // Orders
   orders: Order[];
   addOrder: (order: Order, options?: { silent?: boolean }) => void;
@@ -207,18 +214,7 @@ function normalizeBackendUser(user: BackendMobileProfile): UserProfile {
   };
 }
 
-const defaultAddresses: Address[] = [
-  {
-    id: 'addr1', label: 'Rumah', recipient: 'Budi Santoso', phone: '081234567890',
-    address: 'Jl. Merdeka No. 123, RT 05/RW 02, Kel. Menteng', city: 'Jakarta Pusat',
-    province: 'DKI Jakarta', postalCode: '10310', isDefault: true
-  },
-  {
-    id: 'addr2', label: 'Kantor', recipient: 'Budi Santoso', phone: '081234567890',
-    address: 'Gedung Graha Mandiri Lt. 5, Jl. Imam Bonjol No. 61', city: 'Jakarta Pusat',
-    province: 'DKI Jakarta', postalCode: '10310', isDefault: false
-  },
-];
+const defaultAddresses: Address[] = [];
 
 const defaultNotifications: Notification[] = [
   {
@@ -352,6 +348,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [addresses, setAddresses] = useState<Address[]>(defaultAddresses);
+  const [isAddressesLoading, setIsAddressesLoading] = useState(false);
   const [orders, setOrders] = useState<Order[]>(defaultOrders);
   const [notifications, setNotifications] = useState<Notification[]>(defaultNotifications);
   const [wishlist, setWishlist] = useState<string[]>([]);
@@ -364,6 +361,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const clearSession = useCallback(() => {
     Storage.removeItem(SESSION_STORAGE_KEY);
   }, []);
+
+  const persistAddresses = useCallback((nextAddresses: Address[]) => {
+    Storage.setItem('addresses', JSON.stringify(nextAddresses));
+  }, []);
+
+  const sortAddresses = useCallback((nextAddresses: Address[]) => {
+    return [...nextAddresses].sort((left, right) => {
+      if (left.isDefault === right.isDefault) {
+        return 0;
+      }
+
+      return left.isDefault ? -1 : 1;
+    });
+  }, []);
+
+  const hydrateAddresses = useCallback(async (accessToken: string) => {
+    setIsAddressesLoading(true);
+
+    try {
+      const nextAddresses = sortAddresses(
+        await getMobileUserAddresses(accessToken),
+      );
+
+      setAddresses(nextAddresses);
+      persistAddresses(nextAddresses);
+    } finally {
+      setIsAddressesLoading(false);
+    }
+  }, [persistAddresses, sortAddresses]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -398,6 +424,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               accessToken: session.accessToken,
               user: normalizedUser,
             });
+            try {
+              await hydrateAddresses(session.accessToken);
+            } catch {
+              setAddresses([]);
+              persistAddresses([]);
+            }
           } else {
             clearSession();
           }
@@ -409,7 +441,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
     loadData();
-  }, [clearSession, persistSession]);
+  }, [clearSession, hydrateAddresses, persistAddresses, persistSession]);
 
   // Auth
   const login = useCallback(async (phone: string, password: string): Promise<AuthResult> => {
@@ -430,6 +462,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         accessToken: authResponse.accessToken,
         user: normalizedUser,
       });
+      try {
+        await hydrateAddresses(authResponse.accessToken);
+      } catch {
+        setAddresses([]);
+        persistAddresses([]);
+      }
 
       return { success: true };
     } catch (error) {
@@ -438,7 +476,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         error: error instanceof Error ? error.message : 'Login gagal',
       };
     }
-  }, [persistSession]);
+  }, [hydrateAddresses, persistAddresses, persistSession]);
 
   const register = useCallback(async (data: RegisteredUser, registrationToken: string): Promise<AuthResult> => {
     const phoneError = validateIndonesianMobilePhone(data.phone);
@@ -490,6 +528,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         accessToken: authResponse.accessToken,
         user: normalizedUser,
       });
+      try {
+        await hydrateAddresses(authResponse.accessToken);
+      } catch {
+        setAddresses([]);
+        persistAddresses([]);
+      }
 
       return { success: true };
     } catch (error) {
@@ -498,12 +542,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         error: error instanceof Error ? error.message : 'Registrasi gagal',
       };
     }
-  }, [persistSession]);
+  }, [hydrateAddresses, persistAddresses, persistSession]);
 
   const logout = useCallback(() => {
     setAuthToken(null);
     setIsLoggedIn(false);
     setUserState(guestUser);
+    setAddresses([]);
+    Storage.removeItem('addresses');
     clearSession();
   }, [clearSession]);
 
@@ -565,18 +611,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const getCartCount = useCallback(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
 
   // Addresses
-  const addAddress = useCallback((address: Address) => {
-    setAddresses(prev => {
-      const a = address.isDefault ? [...prev.map(x => ({ ...x, isDefault: false })), address] : [...prev, address];
-      Storage.setItem('addresses', JSON.stringify(a)); return a;
+  const refreshAddresses = useCallback(async () => {
+    if (!authToken || !isLoggedIn) {
+      setAddresses([]);
+      persistAddresses([]);
+      return;
+    }
+
+    await hydrateAddresses(authToken);
+  }, [authToken, hydrateAddresses, isLoggedIn, persistAddresses]);
+
+  const createAddress = useCallback(async (payload: CreateMobileUserAddressPayload) => {
+    if (!authToken || !isLoggedIn) {
+      throw new Error('Silakan login untuk menyimpan alamat pengiriman.');
+    }
+
+    const createdAddress = await createMobileUserAddress(authToken, payload);
+    await hydrateAddresses(authToken);
+    return createdAddress;
+  }, [authToken, hydrateAddresses, isLoggedIn]);
+
+  const removeAddress = useCallback(async (id: string) => {
+    if (!authToken || !isLoggedIn) {
+      throw new Error('Silakan login untuk menghapus alamat pengiriman.');
+    }
+
+    await deleteMobileUserAddress(authToken, id);
+    await hydrateAddresses(authToken);
+  }, [authToken, hydrateAddresses, isLoggedIn]);
+
+  const setDefaultAddress = useCallback(async (id: string) => {
+    if (!authToken || !isLoggedIn) {
+      throw new Error('Silakan login untuk mengubah alamat utama.');
+    }
+
+    await updateMobileUserAddress(authToken, id, {
+      isPrimary: true,
     });
-  }, []);
-  const removeAddress = useCallback((id: string) => {
-    setAddresses(prev => { const a = prev.filter(x => x.id !== id); Storage.setItem('addresses', JSON.stringify(a)); return a; });
-  }, []);
-  const setDefaultAddress = useCallback((id: string) => {
-    setAddresses(prev => { const a = prev.map(x => ({ ...x, isDefault: x.id === id })); Storage.setItem('addresses', JSON.stringify(a)); return a; });
-  }, []);
+    await hydrateAddresses(authToken);
+  }, [authToken, hydrateAddresses, isLoggedIn]);
 
   // Orders
   const addOrder = useCallback((order: Order, options?: { silent?: boolean }) => {
@@ -655,7 +728,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isAuthHydrating, isLoggedIn, authToken, user, setUser, updateStatus, login, register, logout,
       isOnboarded, setIsOnboarded: handleSetOnboarded, hasAcceptedTerms, setHasAcceptedTerms: handleSetHasAcceptedTerms,
       cart, addToCart, removeFromCart, updateCartQuantity, clearCart, getCartTotal, getCartCount,
-      addresses, addAddress, removeAddress, setDefaultAddress,
+      addresses, isAddressesLoading, refreshAddresses, createAddress, removeAddress, setDefaultAddress,
       orders, addOrder, patchOrder, updateOrderStatus, updateOrderPayment, getDraftOrder,
       notifications, addNotification, markNotificationRead, markAllNotificationsRead, getUnreadCount,
       wishlist, toggleWishlist,

@@ -1,9 +1,17 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
-import { useApp, Address } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 
 type ActiveTab = 'alamat' | 'toko';
 
@@ -30,52 +38,170 @@ const NEARBY_STORES = [
 
 export default function AddressesScreen() {
   const router = useRouter();
-  const { addresses, addAddress, removeAddress, setDefaultAddress } = useApp();
+  const {
+    addresses,
+    isAddressesLoading,
+    isLoggedIn,
+    refreshAddresses,
+    removeAddress,
+    setDefaultAddress,
+  } = useApp();
   const [activeTab, setActiveTab] = useState<ActiveTab>('alamat');
-  const [showForm, setShowForm] = useState(false);
   const [selectedStoreId, setSelectedStoreId] = useState(NEARBY_STORES[0].id);
-  const [form, setForm] = useState({
-    label: '',
-    recipient: '',
-    phone: '',
-    address: '',
-    city: '',
-    province: '',
-    postalCode: '',
-  });
 
-  const handleSave = () => {
-    if (!form.label || !form.recipient || !form.phone || !form.address || !form.city) {
-      Alert.alert('Peringatan', 'Mohon lengkapi semua data yang diperlukan');
+  useEffect(() => {
+    if (!isLoggedIn) {
       return;
     }
 
-    const newAddress: Address = {
-      id: `addr_${Date.now()}`,
-      ...form,
-      isDefault: addresses.length === 0,
-    };
-
-    addAddress(newAddress);
-    setForm({
-      label: '',
-      recipient: '',
-      phone: '',
-      address: '',
-      city: '',
-      province: '',
-      postalCode: '',
+    void refreshAddresses().catch(() => {
+      // Keep the last known address list if refresh fails.
     });
-    setShowForm(false);
-    setActiveTab('alamat');
-    Alert.alert('Berhasil', 'Alamat berhasil ditambahkan');
-  };
+  }, [isLoggedIn, refreshAddresses]);
 
   const handleDelete = (id: string, label: string) => {
     Alert.alert('Hapus Alamat', `Hapus alamat "${label}"?`, [
       { text: 'Batal', style: 'cancel' },
-      { text: 'Hapus', style: 'destructive', onPress: () => removeAddress(id) },
+      {
+        text: 'Hapus',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            try {
+              await removeAddress(id);
+            } catch (error) {
+              Alert.alert(
+                'Gagal',
+                error instanceof Error ? error.message : 'Alamat gagal dihapus.',
+              );
+            }
+          })();
+        },
+      },
     ]);
+  };
+
+  const handleSetDefault = async (id: string) => {
+    try {
+      await setDefaultAddress(id);
+    } catch (error) {
+      Alert.alert(
+        'Gagal',
+        error instanceof Error
+          ? error.message
+          : 'Alamat utama belum berhasil diperbarui.',
+      );
+    }
+  };
+
+  const renderAddressesContent = () => {
+    if (!isLoggedIn) {
+      return (
+        <View style={styles.empty}>
+          <Ionicons name="log-in-outline" size={42} color={COLORS.textLight} />
+          <Text style={styles.emptyTitle}>Masuk untuk kelola alamat</Text>
+          <Text style={styles.emptyDescription}>
+            Alamat pengiriman sekarang tersimpan ke akun Anda agar bisa dipakai saat checkout.
+          </Text>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => router.push('/(tabs)/profile')}
+          >
+            <Text style={styles.primaryButtonText}>Buka Profil</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Daftar alamat tujuan</Text>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => router.push('/address-form')}
+          >
+            <Ionicons name="add" size={16} color={COLORS.primary} />
+            <Text style={styles.addButtonText}>Tambah</Text>
+          </TouchableOpacity>
+        </View>
+
+        {isAddressesLoading ? (
+          <View style={styles.loadingState}>
+            <ActivityIndicator color={COLORS.primary} />
+            <Text style={styles.loadingText}>Memuat alamat pengiriman...</Text>
+          </View>
+        ) : null}
+
+        {!isAddressesLoading && addresses.map((addr) => (
+          <TouchableOpacity
+            key={addr.id}
+            style={[styles.card, addr.isDefault && styles.cardActive]}
+            onPress={() => {
+              if (!addr.isDefault) {
+                void handleSetDefault(addr.id);
+              }
+            }}
+            activeOpacity={0.85}
+          >
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <Ionicons
+                  name={addr.isDefault ? 'checkmark-circle' : 'location-outline'}
+                  size={18}
+                  color={addr.isDefault ? COLORS.primary : COLORS.textSecondary}
+                />
+                <View style={styles.cardBody}>
+                  <View style={styles.addressTitleRow}>
+                    <Text style={styles.addressLabel}>{addr.label}</Text>
+                    {addr.isDefault ? (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>Utama</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={styles.addressMeta}>
+                    {addr.recipient} · {addr.phone}
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity onPress={() => handleDelete(addr.id, addr.label)} hitSlop={8}>
+                <Ionicons name="trash-outline" size={18} color={COLORS.accent} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.addressText}>{addr.address}</Text>
+            {addr.additional ? (
+              <Text style={styles.addressAdditional}>{addr.additional}</Text>
+            ) : null}
+            <Text style={styles.cityText}>
+              {addr.subDistrict}, {addr.district}, {addr.city}, {addr.province} {addr.postalCode}
+            </Text>
+
+            {!addr.isDefault ? (
+              <Text style={styles.setDefaultText}>Tap untuk jadikan alamat utama</Text>
+            ) : null}
+          </TouchableOpacity>
+        ))}
+
+        {!isAddressesLoading && addresses.length === 0 ? (
+          <View style={styles.empty}>
+            <Ionicons name="location-outline" size={42} color={COLORS.textLight} />
+            <Text style={styles.emptyTitle}>Belum ada alamat</Text>
+            <Text style={styles.emptyDescription}>
+              Tambahkan alamat pengiriman pertama Anda untuk dipakai saat checkout.
+            </Text>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => router.push('/address-form')}
+            >
+              <Text style={styles.primaryButtonText}>Tambah Alamat</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      </View>
+    );
   };
 
   return (
@@ -114,68 +240,13 @@ export default function AddressesScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         {activeTab === 'alamat' ? (
-          <View>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Daftar alamat tujuan</Text>
-              <TouchableOpacity style={styles.addButton} onPress={() => setShowForm(true)}>
-                <Ionicons name="add" size={16} color={COLORS.primary} />
-                <Text style={styles.addButtonText}>Tambah</Text>
-              </TouchableOpacity>
-            </View>
-
-            {addresses.map((addr) => (
-              <TouchableOpacity
-                key={addr.id}
-                style={[styles.card, addr.isDefault && styles.cardActive]}
-                onPress={() => setDefaultAddress(addr.id)}
-                activeOpacity={0.85}
-              >
-                <View style={styles.cardHeader}>
-                  <View style={styles.cardHeaderLeft}>
-                    <Ionicons
-                      name={addr.isDefault ? 'checkmark-circle' : 'location-outline'}
-                      size={18}
-                      color={addr.isDefault ? COLORS.primary : COLORS.textSecondary}
-                    />
-                    <View>
-                      <View style={styles.addressTitleRow}>
-                        <Text style={styles.addressLabel}>{addr.label}</Text>
-                        {addr.isDefault && (
-                          <View style={styles.badge}>
-                            <Text style={styles.badgeText}>Utama</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.addressMeta}>{addr.recipient} · {addr.phone}</Text>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity onPress={() => handleDelete(addr.id, addr.label)} hitSlop={8}>
-                    <Ionicons name="trash-outline" size={18} color={COLORS.accent} />
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={styles.addressText}>{addr.address}</Text>
-                <Text style={styles.cityText}>{addr.city}, {addr.province} {addr.postalCode}</Text>
-
-                {!addr.isDefault && (
-                  <Text style={styles.setDefaultText}>Tap untuk jadikan alamat utama</Text>
-                )}
-              </TouchableOpacity>
-            ))}
-
-            {addresses.length === 0 && (
-              <View style={styles.empty}>
-                <Ionicons name="location-outline" size={42} color={COLORS.textLight} />
-                <Text style={styles.emptyTitle}>Belum ada alamat</Text>
-                <TouchableOpacity style={styles.primaryButton} onPress={() => setShowForm(true)}>
-                  <Text style={styles.primaryButtonText}>Tambah Alamat</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
+          renderAddressesContent()
         ) : (
           <View>
             <Text style={styles.sectionTitle}>Daftar toko terdekat</Text>
@@ -197,13 +268,15 @@ export default function AddressesScreen() {
                         size={18}
                         color={selected ? COLORS.primary : COLORS.textSecondary}
                       />
-                      <View>
+                      <View style={styles.cardBody}>
                         <Text style={styles.addressLabel}>{store.name}</Text>
                         <Text style={styles.addressMeta}>{store.distance}</Text>
                       </View>
                     </View>
 
-                    {selected && <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />}
+                    {selected ? (
+                      <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />
+                    ) : null}
                   </View>
 
                   <Text style={styles.addressText}>{store.address}</Text>
@@ -213,58 +286,6 @@ export default function AddressesScreen() {
           </View>
         )}
       </ScrollView>
-
-      <Modal visible={showForm} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView
-            style={styles.modalKeyboardWrap}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
-          >
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Tambah Alamat Baru</Text>
-                <TouchableOpacity onPress={() => setShowForm(false)}>
-                  <Ionicons name="close" size={24} color={COLORS.text} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.formScrollContent}
-              >
-                {[
-                  { key: 'label', label: 'Label Alamat', placeholder: 'Contoh: Rumah, Kantor' },
-                  { key: 'recipient', label: 'Nama Penerima', placeholder: 'Nama lengkap penerima' },
-                  { key: 'phone', label: 'No. Telepon', placeholder: '08xxxxxxxxxx', keyboardType: 'phone-pad' },
-                  { key: 'address', label: 'Alamat Lengkap', placeholder: 'Jalan, RT/RW, Kelurahan', multiline: true },
-                  { key: 'city', label: 'Kota/Kabupaten', placeholder: 'Nama kota' },
-                  { key: 'province', label: 'Provinsi', placeholder: 'Nama provinsi' },
-                  { key: 'postalCode', label: 'Kode Pos', placeholder: 'Kode pos', keyboardType: 'number-pad' },
-                ].map((field) => (
-                  <View key={field.key} style={styles.formGroup}>
-                    <Text style={styles.formLabel}>{field.label}</Text>
-                    <TextInput
-                      style={[styles.formInput, field.multiline && styles.formInputMulti]}
-                      value={(form as Record<string, string>)[field.key]}
-                      onChangeText={(text) => setForm({ ...form, [field.key]: text })}
-                      placeholder={field.placeholder}
-                      placeholderTextColor={COLORS.textLight}
-                      multiline={field.multiline}
-                      keyboardType={(field as { keyboardType?: 'default' | 'phone-pad' | 'number-pad' }).keyboardType}
-                    />
-                  </View>
-                ))}
-
-                <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                  <Text style={styles.saveBtnText}>Simpan Alamat</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -338,171 +359,134 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: COLORS.primaryBg,
-    borderRadius: RADIUS.md,
+    borderRadius: 999,
+    backgroundColor: '#E8F5E9',
   },
   addButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
     color: COLORS.primary,
+    fontWeight: '700',
+    fontSize: 13,
   },
   card: {
     backgroundColor: COLORS.white,
-    borderRadius: RADIUS.md,
-    padding: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
     marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     ...SHADOWS.small,
   },
   cardActive: {
-    borderColor: COLORS.primary,
+    borderWidth: 1,
+    borderColor: '#A5D6A7',
+    backgroundColor: '#F5FBF5',
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    gap: 12,
   },
   cardHeaderLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
+  },
+  cardBody: {
     flex: 1,
-    paddingRight: 8,
   },
   addressTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 4,
   },
   addressLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: COLORS.text,
   },
   badge: {
-    backgroundColor: COLORS.primaryBg,
-    borderRadius: RADIUS.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    backgroundColor: '#DDEFD7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
   },
   badgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: COLORS.primary,
+    fontSize: 11,
+    color: '#1B5E20',
+    fontWeight: '700',
   },
   addressMeta: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textSecondary,
   },
   addressText: {
+    fontSize: 14,
+    color: COLORS.text,
+    marginTop: 12,
+    lineHeight: 20,
+  },
+  addressAdditional: {
     fontSize: 13,
     color: COLORS.textSecondary,
+    marginTop: 6,
     lineHeight: 18,
   },
   cityText: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    marginTop: 4,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 8,
+    lineHeight: 18,
   },
   setDefaultText: {
-    marginTop: 10,
     fontSize: 12,
-    fontWeight: '600',
     color: COLORS.primary,
+    marginTop: 10,
+    fontWeight: '600',
   },
   empty: {
     alignItems: 'center',
-    paddingVertical: 48,
-    backgroundColor: COLORS.white,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    justifyContent: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: 20,
   },
   emptyTitle: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
     marginTop: 12,
-    marginBottom: 16,
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  emptyDescription: {
+    marginTop: 8,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
   },
   primaryButton: {
+    marginTop: 18,
     backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingVertical: 12,
+    borderRadius: 999,
   },
   primaryButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
     color: COLORS.white,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalKeyboardWrap: {
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: RADIUS.xxl,
-    borderTopRightRadius: RADIUS.xxl,
-    padding: SPACING.xl,
-    maxHeight: '85%',
-  },
-  formScrollContent: {
-    paddingBottom: SPACING.xl,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.lg,
-  },
-  modalTitle: {
-    fontSize: 18,
     fontWeight: '700',
-    color: COLORS.text,
+    fontSize: 14,
   },
-  formGroup: {
-    marginBottom: SPACING.md,
+  loadingState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    gap: 10,
   },
-  formLabel: {
+  loadingText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 6,
-  },
-  formInput: {
-    backgroundColor: COLORS.background,
-    borderRadius: RADIUS.sm,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm + 2,
-    fontSize: 14,
-    color: COLORS.text,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  formInputMulti: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  saveBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.md,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: SPACING.md,
-    marginBottom: SPACING.xl,
-  },
-  saveBtnText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '700',
+    color: COLORS.textSecondary,
   },
 });
