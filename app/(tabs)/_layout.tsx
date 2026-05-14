@@ -1,11 +1,11 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity, Animated, Dimensions } from 'react-native';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import CSChatWidget from '../../components/CSChatWidget';
 
 const { width, height } = Dimensions.get('window');
@@ -57,11 +57,13 @@ function DraftOrderBanner() {
 export default function TabLayout() {
   const { user, getDraftOrder } = useApp();
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const [chatVisible, setChatVisible] = useState(false);
   const chatAnim = React.useRef(new Animated.Value(0)).current;
   const tabBarHeight = Platform.OS === 'ios' ? 90 : 70;
   const hasDraftOrder = Boolean(getDraftOrder());
   const floatingBottom = hasDraftOrder ? tabBarHeight + 84 : tabBarHeight + SPACING.lg;
+  const isHomeRoute = pathname === '/' || pathname === '/index' || pathname === '/(tabs)' || pathname === '/(tabs)/index';
 
   const openCSChat = () => {
     setChatVisible(true);
@@ -79,6 +81,16 @@ export default function TabLayout() {
       useNativeDriver: true,
     }).start(() => setChatVisible(false));
   };
+
+  useEffect(() => {
+    if (!isHomeRoute && chatVisible) {
+      Animated.timing(chatAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }).start(() => setChatVisible(false));
+    }
+  }, [chatAnim, chatVisible, isHomeRoute]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -152,7 +164,7 @@ export default function TabLayout() {
       {/* Global Draft Order Banner — muncul di semua tab, di bawah ikon CS */}
       <DraftOrderBanner />
 
-      {user?.role !== 'expert' && (
+      {user?.role !== 'expert' && isHomeRoute && (
         <View style={[styles.fabCSContainer, { bottom: floatingBottom }]}>
           <TouchableOpacity style={styles.fabCS} onPress={openCSChat} activeOpacity={0.9}>
             <Ionicons name="chatbubble-ellipses-outline" size={26} color={COLORS.white} />
@@ -160,7 +172,7 @@ export default function TabLayout() {
         </View>
       )}
 
-      {chatVisible && (
+      {chatVisible && isHomeRoute && (
         <Animated.View style={[
           StyleSheet.absoluteFill,
           {
@@ -173,7 +185,7 @@ export default function TabLayout() {
         </Animated.View>
       )}
 
-      {chatVisible && (
+      {chatVisible && isHomeRoute && (
         <Animated.View style={[
           styles.chatWidgetContainer,
           { bottom: floatingBottom },

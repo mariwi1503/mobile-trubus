@@ -1,21 +1,88 @@
-import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
-import { FAQS } from '../data/faqs';
+import { getMobileFaqs } from '../lib/faqs';
+import { FaqItem } from '../types/faq';
 
 export default function FaqScreen() {
   const router = useRouter();
-  const [openId, setOpenId] = useState<string | null>(FAQS[0]?.id ?? null);
+  const [faqs, setFaqs] = useState<FaqItem[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadFaqs = async () => {
+      try {
+        setLoading(true);
+        const response = await getMobileFaqs();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setFaqs(response);
+        setError(null);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setFaqs([]);
+        setError('FAQ belum dapat dimuat dari backend.');
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadFaqs();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [reloadKey]);
+
+  useEffect(() => {
+    setOpenId((currentOpenId) => {
+      if (currentOpenId && faqs.some((item) => item.id === currentOpenId)) {
+        return currentOpenId;
+      }
+
+      return faqs[0]?.id ?? null;
+    });
+  }, [faqs]);
 
   const groupedFaqs = useMemo(() => {
-    return FAQS.reduce<Record<string, typeof FAQS>>((acc, item) => {
-      if (!acc[item.category]) acc[item.category] = [];
-      acc[item.category].push(item);
-      return acc;
-    }, {});
-  }, []);
+    const groups = new Map<string, FaqItem[]>();
+
+    faqs.forEach((item) => {
+      const categoryFaqs = groups.get(item.category) ?? [];
+      categoryFaqs.push(item);
+      groups.set(item.category, categoryFaqs);
+    });
+
+    return Array.from(groups.entries()).map(([category, items]) => ({
+      category,
+      items,
+    }));
+  }, [faqs]);
+
+  const isRefreshing = loading && faqs.length > 0;
 
   return (
     <View style={styles.container}>
@@ -29,7 +96,18 @@ export default function FaqScreen() {
         </View>
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => setReloadKey((current) => current + 1)}
+            tintColor={COLORS.primary}
+          />
+        }
+      >
         <View style={styles.heroCard}>
           <View style={styles.heroIcon}>
             <Ionicons name="help-circle" size={24} color={COLORS.primary} />
@@ -42,7 +120,37 @@ export default function FaqScreen() {
           </View>
         </View>
 
-        {Object.entries(groupedFaqs).map(([category, items]) => (
+        {loading && faqs.length === 0 ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Memuat FAQ...</Text>
+          </View>
+        ) : null}
+
+        {!loading && faqs.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons
+              name={error ? 'cloud-offline-outline' : 'help-buoy-outline'}
+              size={48}
+              color={COLORS.textLight}
+            />
+            <Text style={styles.emptyTitle}>
+              {error ? 'FAQ belum tersedia' : 'Belum ada FAQ'}
+            </Text>
+            <Text style={styles.emptyDescription}>
+              {error || 'Pertanyaan yang sering ditanyakan akan muncul di sini.'}
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => setReloadKey((current) => current + 1)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.retryButtonText}>Coba lagi</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {groupedFaqs.map(({ category, items }) => (
           <View key={category} style={styles.section}>
             <Text style={styles.sectionTitle}>{category}</Text>
             <View style={styles.card}>
@@ -149,6 +257,16 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     lineHeight: 19,
   },
+  loadingWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.xxl,
+    gap: SPACING.sm,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
   section: {
     marginBottom: SPACING.lg,
   },
@@ -189,5 +307,38 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginTop: 10,
     paddingRight: 28,
+  },
+  emptyState: {
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.xxl,
+    ...SHADOWS.small,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginTop: SPACING.md,
+  },
+  emptyDescription: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginTop: SPACING.sm,
+  },
+  retryButton: {
+    marginTop: SPACING.lg,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  retryButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.white,
   },
 });
