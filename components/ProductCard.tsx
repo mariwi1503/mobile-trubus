@@ -74,7 +74,6 @@ export default function ProductCard({ product, compact, fullWidth }: ProductCard
         </View>
         <AddToCartButton
           label="Tambah"
-          loadingLabel="Proses..."
           idleIcon="cart-outline"
           iconSize={14}
           containerStyle={styles.addBtn}

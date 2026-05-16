@@ -20,6 +20,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": false,
+      "usesCleartextTraffic": true,
       "package": "com.trubus.app",
       "permissions": [
         "android.permission.RECORD_AUDIO",

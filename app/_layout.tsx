@@ -48,6 +48,8 @@ export default function RootLayout() {
             <Stack.Screen name="notifications" />
             <Stack.Screen name="addresses" />
             <Stack.Screen name="address-form" />
+            <Stack.Screen name="profile-edit" />
+            <Stack.Screen name="change-password" />
             <Stack.Screen name="article/[id]" />
           </Stack>
         </CartAnimationProvider>

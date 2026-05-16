@@ -197,7 +197,33 @@ export default function ProductDetailScreen() {
             }}
           >
             <TouchableOpacity ref={setCartTargetNode} style={styles.headerBtn} onPress={() => router.push('/cart')}>
-              <Ionicons name="cart-outline" size={22} color={COLORS.text} />
+              <Animated.View
+                style={[
+                  styles.cartIconWrap,
+                  {
+                    opacity: cartImpactAnim.interpolate({
+                      inputRange: [0, 0.5, 1],
+                      outputRange: [1, 0.42, 1],
+                    }),
+                  },
+                ]}
+              >
+                <Ionicons name="cart-outline" size={22} color={COLORS.text} />
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.cartIconBlinkOverlay,
+                    {
+                      opacity: cartImpactAnim.interpolate({
+                        inputRange: [0, 0.3, 0.7, 1],
+                        outputRange: [0, 0.88, 0.12, 0],
+                      }),
+                    },
+                  ]}
+                >
+                  <Ionicons name="cart" size={22} color={COLORS.text} />
+                </Animated.View>
+              </Animated.View>
               {cartCount > 0 && (
                 <View style={styles.cartBadge}>
                   <Text style={styles.cartBadgeText}>{cartCount}</Text>
@@ -317,7 +343,6 @@ export default function ProductDetailScreen() {
         </View>
         <AddToCartButton
           label="Tambah ke Keranjang"
-          loadingLabel="Menambahkan..."
           idleIcon="cart"
           iconSize={18}
           containerStyle={styles.addToCartBtn}
@@ -366,6 +391,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   headerRight: { flexDirection: 'row', gap: 8 },
+  cartIconWrap: {
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartIconBlinkOverlay: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cartBadge: {
     position: 'absolute', top: -2, right: -2,
     backgroundColor: COLORS.accent, borderRadius: 8, minWidth: 16, height: 16,

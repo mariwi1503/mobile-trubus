@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Animated, Modal, Linking, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Animated, Modal, Linking, ActivityIndicator, RefreshControl, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -118,8 +118,10 @@ async function loadHomeExpertsData() {
 function ConsumerHomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const { user, getCartCount, getUnreadCount } = useApp();
   const { setCartTarget } = useCartAnimation();
+  const quickMenuItemWidth = Math.floor((windowWidth - (SPACING.lg * 4)) / 5);
 
   const [interstitialVisible, setInterstitialVisible] = useState(false);
   const [interstitialAd, setInterstitialAd] =
@@ -446,7 +448,33 @@ function ConsumerHomeScreen() {
               }}
             >
               <TouchableOpacity ref={setCartTargetNode} style={styles.iconBtn} onPress={() => router.push('/cart')}>
-                <Ionicons name="cart-outline" size={22} color={COLORS.white} />
+                <Animated.View
+                  style={[
+                    styles.cartIconWrap,
+                    {
+                      opacity: cartImpactAnim.interpolate({
+                        inputRange: [0, 0.5, 1],
+                        outputRange: [1, 0.42, 1],
+                      }),
+                    },
+                  ]}
+                >
+                  <Ionicons name="cart-outline" size={22} color={COLORS.white} />
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.cartIconBlinkOverlay,
+                      {
+                        opacity: cartImpactAnim.interpolate({
+                          inputRange: [0, 0.3, 0.7, 1],
+                          outputRange: [0, 0.88, 0.12, 0],
+                        }),
+                      },
+                    ]}
+                  >
+                    <Ionicons name="cart" size={22} color={COLORS.white} />
+                  </Animated.View>
+                </Animated.View>
                 {getCartCount() > 0 && (
                   <View style={styles.notifBadge}>
                     <Text style={styles.notifBadgeText}>{getCartCount()}</Text>
@@ -544,7 +572,7 @@ function ConsumerHomeScreen() {
             {QUICK_MENU.map((item) => (
               <TouchableOpacity
                 key={item.id}
-                style={styles.quickMenuItem}
+                style={[styles.quickMenuItem, { width: quickMenuItemWidth }]}
                 onPress={() => router.push(item.params ? { pathname: item.route as any, params: item.params } : item.route as any)}
               >
                 <View style={[styles.quickMenuIcon, { backgroundColor: item.color + '15' }]}>
@@ -773,6 +801,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
+  cartIconWrap: {
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartIconBlinkOverlay: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   iconImpactGlow: {
     position: 'absolute',
     top: -8,
@@ -832,15 +871,15 @@ const styles = StyleSheet.create({
   seeAll: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
   quickMenu: {
     flexDirection: 'row', flexWrap: 'wrap',
-    paddingHorizontal: SPACING.lg, justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg, justifyContent: 'flex-start',
     backgroundColor: COLORS.white, borderRadius: RADIUS.md, marginHorizontal: SPACING.lg, paddingVertical: SPACING.md
   },
-  quickMenuItem: { width: '20%', alignItems: 'center', marginBottom: SPACING.md },
+  quickMenuItem: { alignItems: 'center', marginBottom: SPACING.md },
   quickMenuIcon: {
     width: 52, height: 52, borderRadius: 16,
     alignItems: 'center', justifyContent: 'center', marginBottom: 6,
   },
-  quickMenuText: { fontSize: 11, color: COLORS.text, fontWeight: '600', textAlign: 'center' },
+  quickMenuText: { fontSize: 11, color: COLORS.text, fontWeight: '600', textAlign: 'center', width: '100%' },
 
   // CTA Component
   ctaContainer: {

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   GestureResponderEvent,
   StyleProp,
@@ -11,16 +10,14 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { COLORS } from '../constants/theme';
 
-type ButtonStatus = 'idle' | 'loading' | 'success';
+type ButtonStatus = 'idle' | 'success';
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface AddToCartButtonProps {
   label: string;
   successLabel?: string;
-  loadingLabel?: string;
   idleIcon: IconName;
   successIcon?: IconName;
   iconSize?: number;
@@ -40,7 +37,6 @@ const SUCCESS_RESET_DELAY = 1600;
 export default function AddToCartButton({
   label,
   successLabel = 'Ditambahkan',
-  loadingLabel = 'Menambahkan...',
   idleIcon,
   successIcon = 'checkmark-circle',
   iconSize = 16,
@@ -57,6 +53,7 @@ export default function AddToCartButton({
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const shimmerAnim = useRef(new Animated.Value(0)).current;
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState<ButtonStatus>('idle');
 
   const clearResetTimer = useCallback(() => {
@@ -123,27 +120,24 @@ export default function AddToCartButton({
   const handlePress = useCallback(async (event: GestureResponderEvent) => {
     onPressStart?.(event);
 
-    if (status === 'loading') {
+    if (isSubmitting) {
       return;
     }
 
     clearResetTimer();
-    setStatus('loading');
-    void Haptics.selectionAsync().catch(() => undefined);
+    setIsSubmitting(true);
 
     try {
       const isAdded = await onAdd();
 
       if (!isAdded) {
         setStatus('idle');
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
         return;
       }
 
       if (disableSuccessFeedback) {
         await onSuccess?.();
         setStatus('idle');
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
         return;
       }
 
@@ -151,17 +145,16 @@ export default function AddToCartButton({
       animateSuccess();
       scheduleReset();
       onSuccess?.();
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
     } catch {
       setStatus('idle');
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [animateSuccess, clearResetTimer, disableSuccessFeedback, onAdd, onPressStart, onSuccess, scheduleReset, status]);
+  }, [animateSuccess, clearResetTimer, disableSuccessFeedback, isSubmitting, onAdd, onPressStart, onSuccess, scheduleReset]);
 
-  const isLoading = status === 'loading';
   const isSuccess = status === 'success';
   const currentIcon = isSuccess ? successIcon : idleIcon;
-  const currentLabel = isLoading ? loadingLabel : isSuccess ? successLabel : label;
+  const currentLabel = isSuccess ? successLabel : label;
   const containerStyles = [styles.button, containerStyle, isSuccess && styles.buttonSuccess, isSuccess && successContainerStyle];
   const labelStyles = [styles.label, textStyle, isSuccess && styles.labelSuccess, isSuccess && successTextStyle];
 
@@ -171,13 +164,9 @@ export default function AddToCartButton({
         activeOpacity={activeOpacity}
         style={containerStyles}
         onPress={handlePress}
-        disabled={isLoading}
+        disabled={isSubmitting}
       >
-        {isLoading ? (
-          <ActivityIndicator size="small" color={COLORS.white} />
-        ) : (
-          <Ionicons name={currentIcon} size={iconSize} color={COLORS.white} />
-        )}
+        <Ionicons name={currentIcon} size={iconSize} color={COLORS.white} />
         <Text style={labelStyles}>{currentLabel}</Text>
         {isSuccess && (
           <Animated.View

@@ -1,11 +1,16 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Alert, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   BackendMobileProfile,
+  changeMobileUserPassword,
   getMobileUserProfile,
   loginMobileUser,
+  MOBILE_PASSWORD_MIN_LENGTH,
   MobileConsumerGender,
+  normalizeIndonesianMobilePhone,
   registerMobileCustomer,
+  updateMobileUserProfile,
   validateEmail,
   updateMobileExpertPresenceStatus,
   validateIndonesianMobilePhone,
@@ -36,23 +41,22 @@ const Storage = {
   getItem: async (key: string): Promise<string | null> => {
     try {
       if (Platform.OS === 'web') { return localStorage.getItem(key); }
-      return memoryStorage[key] || null;
+      return await AsyncStorage.getItem(key);
     } catch { return null; }
   },
   setItem: async (key: string, value: string): Promise<void> => {
     try {
       if (Platform.OS === 'web') { localStorage.setItem(key, value); }
-      else { memoryStorage[key] = value; }
+      else { await AsyncStorage.setItem(key, value); }
     } catch { }
   },
   removeItem: async (key: string): Promise<void> => {
     try {
       if (Platform.OS === 'web') { localStorage.removeItem(key); }
-      else { delete memoryStorage[key]; }
+      else { await AsyncStorage.removeItem(key); }
     } catch { }
   },
 };
-const memoryStorage: Record<string, string> = {};
 
 export interface CartItem {
   cartItemId?: string;
@@ -88,6 +92,7 @@ export interface UserProfile {
   name: string; email: string; phone: string; avatar: string;
   role: 'consumer' | 'expert';
   trubusCoins: number; // For loyalty points
+  gender?: MobileConsumerGender;
   specialization?: string; experience?: number; fee?: number;
   status?: 'online' | 'busy' | 'offline'; // Added status
 }
@@ -118,6 +123,17 @@ interface AppContextType {
   authToken: string | null;
   user: UserProfile;
   setUser: (user: UserProfile) => void;
+  updateProfile: (data: {
+    name: string;
+    email: string;
+    phone: string;
+    gender: MobileConsumerGender;
+  }) => Promise<AuthResult>;
+  changePassword: (data: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) => Promise<AuthResult>;
   updateStatus: (status: UserProfile['status']) => Promise<void>;
   login: (phone: string, password: string) => Promise<AuthResult>;
   register: (data: RegisteredUser, registrationToken: string) => Promise<AuthResult>;
@@ -229,6 +245,7 @@ function normalizeBackendUser(user: BackendMobileProfile): UserProfile {
     avatar: user.gender === 'FEMALE' ? DEFAULT_FEMALE_AVATAR : DEFAULT_MALE_AVATAR,
     role: 'consumer',
     trubusCoins: 0,
+    gender: user.gender,
   };
 }
 
@@ -505,15 +522,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const session = JSON.parse(storedSession) as Partial<StoredSession>;
 
           if (session.accessToken) {
-            const backendUser = await getMobileUserProfile(session.accessToken);
-            const normalizedUser = normalizeBackendUser(backendUser);
+            const cachedUser = session.user ?? guestUser;
+
             setAuthToken(session.accessToken);
-            setUserState(normalizedUser);
+            setUserState(cachedUser);
             setIsLoggedIn(true);
-            persistSession({
-              accessToken: session.accessToken,
-              user: normalizedUser,
-            });
+
+            try {
+              const backendUser = await getMobileUserProfile(session.accessToken);
+              const normalizedUser = normalizeBackendUser(backendUser);
+              setUserState(normalizedUser);
+              persistSession({
+                accessToken: session.accessToken,
+                user: normalizedUser,
+              });
+            } catch {
+              persistSession({
+                accessToken: session.accessToken,
+                user: cachedUser,
+              });
+            }
+
             try {
               await hydrateAddresses(session.accessToken);
             } catch {
@@ -609,7 +638,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, error: emailError };
     }
 
-    const passwordError = validatePassword(data.password, { minLength: 6 });
+    const passwordError = validatePassword(data.password, {
+      minLength: MOBILE_PASSWORD_MIN_LENGTH,
+    });
     if (passwordError) {
       return { success: false, error: passwordError };
     }
@@ -695,6 +726,137 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       persistSession({ accessToken: authToken, user: u });
     }
   }, [authToken, isLoggedIn, persistSession]);
+
+  const updateProfile = useCallback(async (data: {
+    name: string;
+    email: string;
+    phone: string;
+    gender: MobileConsumerGender;
+  }): Promise<AuthResult> => {
+    if (!authToken || !isLoggedIn) {
+      return {
+        success: false,
+        error: 'Silakan login untuk memperbarui profil.',
+      };
+    }
+
+    if (user.role !== 'consumer') {
+      return {
+        success: false,
+        error: 'Perubahan profil ahli belum didukung dari aplikasi ini.',
+      };
+    }
+
+    if (!data.name.trim()) {
+      return { success: false, error: 'Nama lengkap wajib diisi' };
+    }
+
+    const phoneError = validateIndonesianMobilePhone(data.phone);
+    if (phoneError) {
+      return { success: false, error: phoneError };
+    }
+
+    const trimmedEmail = data.email.trim();
+
+    if (user.email.trim() || trimmedEmail) {
+      const emailError = validateEmail(trimmedEmail);
+      if (emailError) {
+        return { success: false, error: emailError };
+      }
+    }
+
+    const { firstName, lastName } = splitFullName(data.name);
+    if (!firstName) {
+      return { success: false, error: 'Nama depan wajib diisi' };
+    }
+
+    try {
+      const backendUser = await updateMobileUserProfile(authToken, {
+        phone: normalizeIndonesianMobilePhone(data.phone),
+        ...(trimmedEmail ? { email: trimmedEmail.toLowerCase() } : {}),
+        firstName,
+        lastName,
+        gender: data.gender,
+      });
+      const normalizedUser = normalizeBackendUser(backendUser);
+
+      setUserState(normalizedUser);
+      persistSession({ accessToken: authToken, user: normalizedUser });
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Profil belum berhasil diperbarui.',
+      };
+    }
+  }, [authToken, isLoggedIn, persistSession, user.email, user.role]);
+
+  const changePassword = useCallback(async (data: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }): Promise<AuthResult> => {
+    if (!authToken || !isLoggedIn) {
+      return {
+        success: false,
+        error: 'Silakan login untuk mengganti password.',
+      };
+    }
+
+    if (user.role !== 'consumer') {
+      return {
+        success: false,
+        error: 'Perubahan password ahli belum didukung dari aplikasi ini.',
+      };
+    }
+
+    const currentPasswordError = validatePassword(data.currentPassword);
+    if (currentPasswordError) {
+      return { success: false, error: 'Password saat ini wajib diisi' };
+    }
+
+    const newPasswordError = validatePassword(data.newPassword, {
+      minLength: MOBILE_PASSWORD_MIN_LENGTH,
+    });
+    if (newPasswordError) {
+      return { success: false, error: newPasswordError };
+    }
+
+    if (data.currentPassword.trim() === data.newPassword.trim()) {
+      return {
+        success: false,
+        error: 'Password baru tidak boleh sama dengan password saat ini',
+      };
+    }
+
+    if (data.newPassword !== data.confirmPassword) {
+      return {
+        success: false,
+        error: 'Konfirmasi password tidak cocok',
+      };
+    }
+
+    try {
+      await changeMobileUserPassword(authToken, {
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword,
+      });
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Password belum berhasil diperbarui.',
+      };
+    }
+  }, [authToken, isLoggedIn, user.role]);
 
   const updateStatus = useCallback(async (status: UserProfile['status']) => {
     setUserState(prev => {
@@ -969,7 +1131,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
-      isAuthHydrating, isLoggedIn, authToken, user, setUser, updateStatus, login, register, logout,
+      isAuthHydrating, isLoggedIn, authToken, user, setUser, updateProfile, changePassword, updateStatus, login, register, logout,
       isOnboarded, setIsOnboarded: handleSetOnboarded, hasAcceptedTerms, setHasAcceptedTerms: handleSetHasAcceptedTerms,
       cart, addToCart, removeFromCart, updateCartQuantity, clearCart, getCartTotal, getCartCount,
       addresses, isAddressesLoading, refreshAddresses, createAddress, removeAddress, setDefaultAddress,

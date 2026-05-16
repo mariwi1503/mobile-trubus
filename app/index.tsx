@@ -5,11 +5,17 @@ import { useApp } from '../context/AppContext';
 
 export default function SplashScreen() {
   const router = useRouter();
-  const { isOnboarded, hasAcceptedTerms } = useApp();
+  const { isAuthHydrating, isOnboarded, hasAcceptedTerms } = useApp();
   const [fadeAnim] = useState(new Animated.Value(0));
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+  }, [fadeAnim]);
+
+  useEffect(() => {
+    if (isAuthHydrating) {
+      return;
+    }
 
     const timer = setTimeout(() => {
       if (!isOnboarded) {
@@ -22,7 +28,7 @@ export default function SplashScreen() {
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [hasAcceptedTerms, isOnboarded]);
+  }, [hasAcceptedTerms, isAuthHydrating, isOnboarded, router]);
 
   return (
     <View style={styles.container}>

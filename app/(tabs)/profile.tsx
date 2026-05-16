@@ -7,6 +7,7 @@ import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { useApp, RegisteredUser } from '../../context/AppContext';
 import { useAlert } from '../../context/AlertContext';
 import {
+  MOBILE_PASSWORD_MIN_LENGTH,
   MobileConsumerGender,
   requestMobileRegistrationOtp,
   validateEmail,
@@ -213,7 +214,9 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
     const emailError = validateEmail(email);
     if (emailError) { setError(emailError); return; }
 
-    const passwordError = validatePassword(password, { minLength: 6 });
+    const passwordError = validatePassword(password, {
+      minLength: MOBILE_PASSWORD_MIN_LENGTH,
+    });
     if (passwordError) { setError(passwordError); return; }
 
     if (password !== confirmPassword) { setError('Konfirmasi password tidak cocok'); return; }
@@ -416,6 +419,9 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
                         <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={COLORS.textLight} />
                       </TouchableOpacity>
                     </View>
+                    <Text style={styles.hintText}>
+                      Gunakan password minimal {MOBILE_PASSWORD_MIN_LENGTH} karakter.
+                    </Text>
 
                     <Text style={styles.inputLabel}>Konfirmasi Password</Text>
                     <View style={styles.passwordRow}>
@@ -615,6 +621,9 @@ function ConsumerProfile() {
   const pendingOrders = orders.filter(o => o.type === 'product' && o.status === 'pending_payment').length;
   const paidOrders = orders.filter(o => o.type === 'product' && (o.status === 'paid' || o.status === 'processing')).length;
   const shippedOrders = orders.filter(o => o.type === 'product' && o.status === 'shipped').length;
+  const completedOrders = orders.filter(
+    (o) => o.type === 'product' && (o.status === 'delivered' || o.status === 'completed'),
+  ).length;
 
   const MENU_ITEMS = [
     {
@@ -628,6 +637,7 @@ function ConsumerProfile() {
       section: 'Akun', items: [
         { id: 'addresses', icon: 'location-outline', label: 'Alamat Pengiriman', route: '/addresses', color: '#FF9800' },
         { id: 'notifications', icon: 'notifications-outline', label: 'Notifikasi', route: '/notifications', color: '#9C27B0' },
+        { id: 'password', icon: 'lock-closed-outline', label: 'Ubah Password', route: '/change-password', color: '#2E7D32' },
       ]
     },
     {
@@ -651,7 +661,12 @@ function ConsumerProfile() {
             <Text style={styles.email}>{user.email}</Text>
             <View style={styles.roleBadge}><Ionicons name="person" size={10} color={COLORS.primary} /><Text style={styles.roleText}>Konsumen</Text></View>
           </View>
-          <TouchableOpacity style={styles.editBtn}><Ionicons name="create-outline" size={18} color={COLORS.white} /></TouchableOpacity>
+          <TouchableOpacity
+            style={styles.editBtn}
+            onPress={() => router.push('/profile-edit')}
+          >
+            <Ionicons name="create-outline" size={18} color={COLORS.white} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -694,7 +709,7 @@ function ConsumerProfile() {
           {[{ icon: 'hourglass', label: 'Belum Bayar', count: pendingOrders, bg: '#FFF3E0', color: '#FF9800' },
           { icon: 'cube', label: 'Diproses', count: paidOrders, bg: '#E3F2FD', color: '#2196F3' },
           { icon: 'car', label: 'Dikirim', count: shippedOrders, bg: '#E8F5E9', color: '#4CAF50' },
-          { icon: 'star', label: 'Beri Nilai', count: 0, bg: '#FCE4EC', color: '#E91E63' }].map((s, i) => (
+          { icon: 'checkmark-done', label: 'Selesai', count: completedOrders, bg: '#E8F5E9', color: '#4CAF50' }].map((s, i) => (
             <TouchableOpacity key={i} style={styles.orderStatusItem} onPress={() => router.push('/orders')}>
               <View style={[styles.orderStatusIcon, { backgroundColor: s.bg }]}>
                 <Ionicons name={s.icon as any} size={20} color={s.color} />

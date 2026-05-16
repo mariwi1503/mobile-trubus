@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { getMobileStores } from '../lib/stores';
@@ -66,6 +67,7 @@ function formatStoreArea(store: Store) {
 
 export default function AddressesScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     addresses,
     isAddressesLoading,
@@ -368,39 +370,43 @@ export default function AddressesScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={20} color={COLORS.text} />
-        </TouchableOpacity>
-      </View>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
+      <View style={[styles.header, { paddingTop: insets.top + SPACING.md }]}>
+        <View style={styles.headerTop}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
+            <Ionicons name="arrow-back" size={20} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Alamat Pengiriman</Text>
+          <View style={styles.headerSpacer} />
+        </View>
 
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'alamat' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('alamat')}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name="location-outline"
-            size={16}
-            color={activeTab === 'alamat' ? COLORS.white : COLORS.textSecondary}
-          />
-          <Text style={[styles.tabText, activeTab === 'alamat' && styles.tabTextActive]}>Alamat Tujuan</Text>
-        </TouchableOpacity>
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'alamat' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('alamat')}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="location-outline"
+              size={16}
+              color={activeTab === 'alamat' ? COLORS.white : COLORS.textSecondary}
+            />
+            <Text style={[styles.tabText, activeTab === 'alamat' && styles.tabTextActive]}>Alamat Tujuan</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'toko' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('toko')}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name="storefront-outline"
-            size={16}
-            color={activeTab === 'toko' ? COLORS.white : COLORS.textSecondary}
-          />
-          <Text style={[styles.tabText, activeTab === 'toko' && styles.tabTextActive]}>Toko Terdekat</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'toko' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('toko')}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="storefront-outline"
+              size={16}
+              color={activeTab === 'toko' ? COLORS.white : COLORS.textSecondary}
+            />
+            <Text style={[styles.tabText, activeTab === 'toko' && styles.tabTextActive]}>Toko Terdekat</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -524,11 +530,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  topBar: {
-    paddingTop: 52,
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.sm,
+  header: {
     backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.md,
   },
   backButton: {
     width: 40,
@@ -538,14 +550,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: COLORS.background,
   },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  headerSpacer: {
+    width: 40,
+    height: 40,
+  },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: COLORS.white,
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.md,
     gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
   },
   tabButton: {
     flex: 1,

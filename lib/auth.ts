@@ -14,6 +14,7 @@ type PasswordValidationOptions = {
 };
 
 export type MobileConsumerGender = 'MALE' | 'FEMALE';
+export const MOBILE_PASSWORD_MIN_LENGTH = 8;
 
 export type MobileRegisterOtpValidationResponse = {
   registrationToken: string;
@@ -26,6 +27,19 @@ export type RegisterMobileCustomerPayload = {
   lastName?: string;
   gender: MobileConsumerGender;
   password: string;
+};
+
+export type UpdateMobileUserProfilePayload = {
+  phone?: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  gender?: MobileConsumerGender;
+};
+
+export type ChangeMobileUserPasswordPayload = {
+  currentPassword: string;
+  newPassword: string;
 };
 
 function formatErrorMessage(payload: unknown, status: number) {
@@ -267,6 +281,35 @@ export async function getMobileUserProfile(accessToken: string) {
       Authorization: `Bearer ${accessToken}`,
     },
   });
+}
+
+export async function updateMobileUserProfile(
+  accessToken: string,
+  payload: UpdateMobileUserProfilePayload,
+) {
+  return requestMobileApi<BackendMobileProfile>('/api/v1/mobile/users/profile', {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function changeMobileUserPassword(
+  accessToken: string,
+  payload: ChangeMobileUserPasswordPayload,
+) {
+  return requestMobileApi<{ message: string }>(
+    '/api/v1/mobile/users/change-password',
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export async function updateMobileExpertPresenceStatus(

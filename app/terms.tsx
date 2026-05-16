@@ -1,103 +1,78 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Asset } from 'expo-asset';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { WebView } from 'react-native-webview';
 import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
 import { useApp } from '../context/AppContext';
+import { TERMS_MARKDOWN } from '../data/termsMarkdown';
+
+type TermsBlock =
+  | { type: 'heading1'; text: string }
+  | { type: 'heading2'; text: string }
+  | { type: 'bullet'; text: string }
+  | { type: 'paragraph'; text: string };
+
+function parseTermsMarkdown(markdown: string): TermsBlock[] {
+  const blocks: TermsBlock[] = [];
+  const lines = markdown.split('\n');
+  let paragraphLines: string[] = [];
+
+  const flushParagraph = () => {
+    const text = paragraphLines.join(' ').trim();
+    if (text) {
+      blocks.push({ type: 'paragraph', text });
+    }
+    paragraphLines = [];
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+
+    if (!line) {
+      flushParagraph();
+      continue;
+    }
+
+    if (line.startsWith('# ')) {
+      flushParagraph();
+      blocks.push({ type: 'heading1', text: line.slice(2).trim() });
+      continue;
+    }
+
+    if (line.startsWith('## ')) {
+      flushParagraph();
+      blocks.push({ type: 'heading2', text: line.slice(3).trim() });
+      continue;
+    }
+
+    if (line.startsWith('- ')) {
+      flushParagraph();
+      blocks.push({ type: 'bullet', text: line.slice(2).trim() });
+      continue;
+    }
+
+    paragraphLines.push(line);
+  }
+
+  flushParagraph();
+  return blocks;
+}
+
+const TERMS_BLOCKS = parseTermsMarkdown(TERMS_MARKDOWN);
 
 export default function TermsScreen() {
   const router = useRouter();
   const { readonly } = useLocalSearchParams<{ readonly?: string }>();
   const { setHasAcceptedTerms } = useApp();
   const [hasAgreed, setHasAgreed] = useState(false);
-  const [pdfUri, setPdfUri] = useState<string | null>(null);
-  const [isPreparingPdf, setIsPreparingPdf] = useState(true);
-  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const isReadOnly = readonly === '1';
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadPdf = async () => {
-      try {
-        setIsPreparingPdf(true);
-        setPdfError(null);
-
-        const asset = Asset.fromModule(require('../docs/syarat-dan-ketentuan.pdf'));
-
-        if (Platform.OS !== 'web' && !asset.localUri) {
-          await asset.downloadAsync();
-        }
-
-        if (!isMounted) return;
-
-        setPdfUri(asset.localUri ?? asset.uri);
-      } catch {
-        if (!isMounted) return;
-        setPdfError('Dokumen PDF tidak dapat dimuat.');
-      } finally {
-        if (isMounted) {
-          setIsPreparingPdf(false);
-        }
-      }
-    };
-
-    loadPdf();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   const handleContinue = () => {
     if (!hasAgreed) return;
     setHasAcceptedTerms(true);
     router.replace('/(tabs)');
-  };
-
-  const renderPdfState = () => {
-    if (isPreparingPdf) {
-      return (
-        <View style={styles.centerState}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.stateTitle}>Menyiapkan dokumen</Text>
-          <Text style={styles.stateSubtitle}>PDF syarat dan ketentuan sedang dimuat.</Text>
-        </View>
-      );
-    }
-
-    if (!pdfUri || pdfError) {
-      return (
-        <View style={styles.centerState}>
-          <Ionicons name="document-text-outline" size={32} color={COLORS.textSecondary} />
-          <Text style={styles.stateTitle}>Dokumen belum tersedia</Text>
-          <Text style={styles.stateSubtitle}>{pdfError ?? 'PDF tidak ditemukan.'}</Text>
-        </View>
-      );
-    }
-
-    return (
-      <WebView
-        source={{ uri: pdfUri }}
-        style={styles.webview}
-        originWhitelist={['*']}
-        allowFileAccess
-        allowUniversalAccessFromFileURLs
-        mixedContentMode="always"
-        onError={() => setPdfError('Dokumen PDF tidak dapat ditampilkan di perangkat ini.')}
-        startInLoadingState
-        renderLoading={() => (
-          <View style={styles.centerState}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={styles.stateSubtitle}>Membuka dokumen...</Text>
-          </View>
-        )}
-      />
-    );
   };
 
   return (
@@ -118,7 +93,44 @@ export default function TermsScreen() {
         </View>
       </View>
 
-      <View style={styles.viewerContainer}>{renderPdfState()}</View>
+      <ScrollView
+        style={styles.viewerContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {TERMS_BLOCKS.map((block, index) => {
+          if (block.type === 'heading1') {
+            return (
+              <Text key={`h1-${index}`} style={styles.documentTitle}>
+                {block.text}
+              </Text>
+            );
+          }
+
+          if (block.type === 'heading2') {
+            return (
+              <Text key={`h2-${index}`} style={styles.sectionTitle}>
+                {block.text}
+              </Text>
+            );
+          }
+
+          if (block.type === 'bullet') {
+            return (
+              <View key={`bullet-${index}`} style={styles.bulletRow}>
+                <Text style={styles.bulletMark}>•</Text>
+                <Text style={styles.bulletText}>{block.text}</Text>
+              </View>
+            );
+          }
+
+          return (
+            <Text key={`p-${index}`} style={styles.paragraph}>
+              {block.text}
+            </Text>
+          );
+        })}
+      </ScrollView>
 
       {!isReadOnly && (
         <View style={styles.footer}>
@@ -189,32 +201,51 @@ const styles = StyleSheet.create({
   viewerContainer: {
     flex: 1,
     backgroundColor: COLORS.white,
-    overflow: 'hidden',
   },
-  webview: {
-    flex: 1,
-    backgroundColor: COLORS.white,
+  scrollContent: {
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 24,
   },
-  centerState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    backgroundColor: COLORS.white,
+  documentTitle: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '800',
+    color: '#183624',
+    marginBottom: 14,
   },
-  stateTitle: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: '700',
+  sectionTitle: {
+    marginTop: 18,
+    marginBottom: 10,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '800',
+    color: '#214a30',
+  },
+  paragraph: {
+    fontSize: 14,
+    lineHeight: 24,
     color: COLORS.text,
-    textAlign: 'center',
+    marginBottom: 10,
   },
-  stateSubtitle: {
-    marginTop: 6,
-    fontSize: 13,
-    lineHeight: 20,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+    paddingRight: 6,
+  },
+  bulletMark: {
+    width: 16,
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#214a30',
+    fontWeight: '700',
+  },
+  bulletText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 24,
+    color: COLORS.text,
   },
   footer: {
     paddingHorizontal: 16,
