@@ -1,43 +1,62 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, SafeAreaView } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  FlatList,
+  SafeAreaView,
+  RefreshControl,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getOrderDisplayCode } from '../lib/order-display';
-
-const STATUS_MAP: Record<string, { label: string; color: string; bg: string; icon: string }> = {
-  draft: { label: 'Draft Pembayaran', color: '#FB8C00', bg: '#FFF3E0', icon: 'document-text' },
-  pending_payment: { label: 'Menunggu Pembayaran', color: '#FF9800', bg: '#FFF3E0', icon: 'hourglass' },
-  paid: { label: 'Dibayar', color: '#2196F3', bg: '#E3F2FD', icon: 'checkmark-circle' },
-  processing: { label: 'Diproses', color: '#9C27B0', bg: '#F3E5F5', icon: 'cube' },
-  shipped: { label: 'Dikirim', color: '#4CAF50', bg: '#E8F5E9', icon: 'car' },
-  delivered: { label: 'Diterima', color: '#4CAF50', bg: '#E8F5E9', icon: 'checkmark-done' },
-  completed: { label: 'Selesai', color: '#607D8B', bg: '#ECEFF1', icon: 'flag' },
-  cancelled: { label: 'Dibatalkan', color: '#F44336', bg: '#FFEBEE', icon: 'close-circle' },
-  expired: { label: 'Kedaluwarsa', color: '#8D6E63', bg: '#EFEBE9', icon: 'time' },
-};
+import {
+  PRODUCT_ORDER_STATUS_MAP,
+  canRetryProductOrderPayment,
+} from '../lib/order-status';
 
 const TABS = ['Semua', 'Belum Bayar', 'Diproses', 'Dikirim', 'Selesai'];
 
 export default function OrdersScreen() {
   const router = useRouter();
-  const { orders } = useApp();
+  const { orders, refreshOrders } = useApp();
   const [activeTab, setActiveTab] = useState('Semua');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const insets = useSafeAreaInsets();
 
   const productOrders = orders.filter(o => o.type === 'product');
 
   const filteredOrders = productOrders.filter(o => {
     switch (activeTab) {
-      case 'Belum Bayar': return o.status === 'draft' || o.status === 'pending_payment' || o.status === 'expired';
+      case 'Belum Bayar': return o.status === 'draft' || o.status === 'pending_payment' || o.status === 'expired' || o.status === 'cancelled';
       case 'Diproses': return o.status === 'paid' || o.status === 'processing';
       case 'Dikirim': return o.status === 'shipped';
       case 'Selesai': return o.status === 'delivered' || o.status === 'completed';
       default: return true;
     }
   });
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+
+    try {
+      await refreshOrders();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refreshOrders]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void handleRefresh();
+    }, [handleRefresh]),
+  );
 
   return (
     <SafeAreaView style={[styles.container, { paddingBottom: insets.bottom }]}>
@@ -76,6 +95,9 @@ export default function OrdersScreen() {
         <View style={styles.empty}>
           <Ionicons name="receipt-outline" size={64} color={COLORS.textLight} />
           <Text style={styles.emptyText}>Belum ada pesanan</Text>
+          <TouchableOpacity style={styles.emptyRefreshBtn} onPress={() => { void handleRefresh(); }}>
+            <Text style={styles.emptyRefreshText}>Muat Ulang</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -83,12 +105,21 @@ export default function OrdersScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={(
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => { void handleRefresh(); }}
+              tintColor={COLORS.primary}
+            />
+          )}
           renderItem={({ item }) => {
-            const status = STATUS_MAP[item.status] || STATUS_MAP.pending_payment;
+            const status = PRODUCT_ORDER_STATUS_MAP[item.status] || PRODUCT_ORDER_STATUS_MAP.pending_payment;
             const date = new Date(item.createdAt);
             const displayOrderCode = getOrderDisplayCode(item);
-            const canRetryPayment = item.status === 'draft' || item.status === 'pending_payment' || item.status === 'expired';
-            const paymentButtonLabel = item.status === 'expired' ? 'Bayar Ulang' : 'Bayar';
+            const canRetryPayment = canRetryProductOrderPayment(item);
+            const paymentButtonLabel = item.status === 'expired' || item.status === 'cancelled'
+              ? 'Bayar Ulang'
+              : 'Bayar';
 
             return (
               <View style={styles.orderCard}>
@@ -149,14 +180,22 @@ export default function OrdersScreen() {
                     <Text style={styles.totalLabel}>Total Belanja</Text>
                     <Text style={styles.totalAmount}>Rp {item.totalAmount.toLocaleString('id-ID')}</Text>
                   </View>
-                  {canRetryPayment && (
+                  <View style={styles.footerActions}>
                     <TouchableOpacity
-                      style={styles.payNowBtn}
-                      onPress={() => router.push({ pathname: '/payment', params: { orderId: item.id } })}
+                      style={styles.detailBtn}
+                      onPress={() => router.push({ pathname: '/order/[id]', params: { id: item.id } })}
                     >
-                      <Text style={styles.payNowText}>{paymentButtonLabel}</Text>
+                      <Text style={styles.detailBtnText}>Detail</Text>
                     </TouchableOpacity>
-                  )}
+                    {canRetryPayment && (
+                      <TouchableOpacity
+                        style={styles.payNowBtn}
+                        onPress={() => router.push({ pathname: '/payment', params: { orderId: item.id } })}
+                      >
+                        <Text style={styles.payNowText}>{paymentButtonLabel}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               </View>
             );
@@ -236,6 +275,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.textSecondary,
     marginTop: 16
+  },
+  emptyRefreshBtn: {
+    marginTop: 16,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
+  },
+  emptyRefreshText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '700',
   },
   orderCard: {
     backgroundColor: COLORS.white,
@@ -323,6 +374,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: COLORS.primaryDark
+  },
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  detailBtn: {
+    backgroundColor: '#F1F5F1',
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+  },
+  detailBtnText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '700',
   },
   payNowBtn: {
     backgroundColor: COLORS.primary,

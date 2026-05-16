@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { useApp, RegisteredUser } from '../../context/AppContext';
@@ -87,36 +87,28 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
   const authHeroContent = (() => {
     if (mode === 'login') {
       return {
-        eyebrow: 'Halo Trubus Account',
-        title: 'Masuk untuk melanjutkan aktivitas Anda',
-        description: 'Pesanan, konsultasi, dan manfaat akun tersimpan rapi di satu tempat.',
-        icon: 'sparkles-outline' as const,
+        title: 'Masuk ke akun Anda',
+        description: 'Lanjutkan belanja, konsultasi, dan pantau aktivitas Anda di Halo Trubus.',
       };
     }
 
     if (registerStep === 'phone') {
       return {
-        eyebrow: 'Buat Akun',
-        title: 'Nomor aktif, akses lebih cepat',
-        description: 'Gunakan nomor WhatsApp Anda untuk memulai pengalaman yang aman dan personal.',
-        icon: 'phone-portrait-outline' as const,
+        title: 'Buat akun baru',
+        description: 'Gunakan nomor WhatsApp aktif untuk memulai pengalaman yang aman dan personal.',
       };
     }
 
     if (registerStep === 'otp') {
       return {
-        eyebrow: 'Konfirmasi Nomor',
-        title: 'Masukkan 6 digit kode verifikasi',
-        description: `Kode telah dikirim ke ${phone || 'nomor Anda'}.`,
-        icon: 'shield-checkmark-outline' as const,
+        title: 'Verifikasi kode OTP',
+        description: `Masukkan 6 digit kode yang telah dikirim ke ${phone || 'nomor Anda'}.`,
       };
     }
 
     return {
-      eyebrow: 'Profil Customer',
       title: 'Selesaikan profil akun Anda',
       description: 'Tambahkan identitas dasar agar akun siap dipakai di seluruh layanan Trubus.',
-      icon: 'person-circle-outline' as const,
     };
   })();
 
@@ -275,26 +267,17 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.authScrollContent}>
-            <LinearGradient
-              colors={['#143B29', '#2F7D32', '#8BCF7B']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.authHeroCard}
-            >
-              <View style={styles.authHeroGlow} />
-              <View style={styles.authHeroTopRow}>
-                <View style={styles.logoRow}>
-                  <Image source={require('../../assets/images/logo.png')} style={styles.logoSmall} resizeMode="contain" />
-                  <Text style={styles.logoText}>Halo Trubus</Text>
-                </View>
-                <View style={styles.authHeroIconWrap}>
-                  <Ionicons name={authHeroContent.icon} size={22} color={COLORS.white} />
-                </View>
+            <View style={styles.authIntroWrap}>
+              <View style={[styles.authIntroImageCard, mode === 'register' && registerStep === 'otp' ? styles.authIntroImageCardOtp : null]}>
+                <Image
+                  source={require('../../assets/images/logo-header.png')}
+                  style={styles.authIntroImage}
+                  resizeMode="contain"
+                />
               </View>
-              <Text style={styles.authHeroEyebrow}>{authHeroContent.eyebrow}</Text>
-              <Text style={styles.authHeroTitle}>{authHeroContent.title}</Text>
-              <Text style={styles.authHeroDescription}>{authHeroContent.description}</Text>
-            </LinearGradient>
+              <Text style={styles.authIntroTitle}>{authHeroContent.title}</Text>
+              <Text style={styles.authIntroText}>{authHeroContent.description}</Text>
+            </View>
 
             {error ? <View style={styles.errorBox}><Ionicons name="alert-circle" size={16} color={COLORS.accent} /><Text style={styles.errorText}>{error}</Text></View> : null}
 
@@ -461,18 +444,6 @@ function AuthModal({ visible, onClose }: { visible: boolean; onClose: () => void
 
             {mode === 'login' && (
               <>
-                <View style={styles.demoInfoCard}>
-                  <View style={styles.demoInfoIconWrap}>
-                    <Ionicons name="flask-outline" size={16} color={COLORS.primaryDark} />
-                  </View>
-                  <View style={styles.demoInfoContent}>
-                    <Text style={styles.demoInfoTitle}>Akun demo testing sudah terisi</Text>
-                    <Text style={styles.demoInfoText}>
-                      Nomor dan password default otomatis dimuat untuk kebutuhan QA.
-                    </Text>
-                  </View>
-                </View>
-
                 <Text style={styles.inputLabel}>No. Telepon</Text>
                 <View style={styles.inputShell}>
                   <View style={styles.inputIconWrap}>
@@ -802,8 +773,28 @@ function GuestProfile({ onLogin }: { onLogin: () => void }) {
 
 // ─── Main Profile Screen ──────────────────────────────────────
 export default function ProfileScreen() {
+  const router = useRouter();
+  const { login } = useLocalSearchParams<{ login?: string }>();
   const { isAuthHydrating, isLoggedIn, user } = useApp();
   const [showAuth, setShowAuth] = useState(false);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      return;
+    }
+
+    if (login === '1') {
+      setShowAuth(true);
+    }
+  }, [isLoggedIn, login]);
+
+  const handleCloseAuth = () => {
+    setShowAuth(false);
+
+    if (login === '1') {
+      router.replace('/(tabs)/profile');
+    }
+  };
 
   if (isAuthHydrating) {
     return (
@@ -818,7 +809,7 @@ export default function ProfileScreen() {
     return (
       <>
         <GuestProfile onLogin={() => setShowAuth(true)} />
-        <AuthModal visible={showAuth} onClose={() => setShowAuth(false)} />
+        <AuthModal visible={showAuth} onClose={handleCloseAuth} />
       </>
     );
   }
@@ -840,23 +831,14 @@ const styles = StyleSheet.create({
   modalHandle: { width: 48, height: 5, backgroundColor: '#D7E2D0', borderRadius: RADIUS.full, alignSelf: 'center', marginBottom: 14 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   modalTitle: { fontSize: 22, fontWeight: '800', color: '#183624' },
-  logoRow: { flexDirection: 'row', alignItems: 'center' },
-  logoSmall: { width: 34, height: 34, marginRight: 8 },
-  logoText: { fontSize: 15, fontWeight: '700', color: COLORS.white },
-  authHeroCard: { borderRadius: 24, paddingHorizontal: 18, paddingVertical: 18, overflow: 'hidden', marginBottom: 16 },
-  authHeroGlow: { position: 'absolute', top: -38, right: -12, width: 132, height: 132, borderRadius: 66, backgroundColor: 'rgba(255,255,255,0.15)' },
-  authHeroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
-  authHeroIconWrap: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' },
-  authHeroEyebrow: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)', marginBottom: 8 },
-  authHeroTitle: { fontSize: 24, fontWeight: '800', lineHeight: 30, color: COLORS.white, marginBottom: 8 },
-  authHeroDescription: { fontSize: 13, lineHeight: 20, color: 'rgba(255,255,255,0.84)' },
+  authIntroWrap: { alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
+  authIntroImageCard: { width: '100%', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F8EE', borderRadius: 28, paddingHorizontal: 18, paddingVertical: 20, borderWidth: 1, borderColor: '#E0EBD8' },
+  authIntroImageCardOtp: { paddingVertical: 16 },
+  authIntroImage: { width: '100%', height: 140 },
+  authIntroTitle: { marginTop: 14, fontSize: 22, fontWeight: '800', color: '#183624', textAlign: 'center' },
+  authIntroText: { marginTop: 6, fontSize: 13, lineHeight: 20, color: '#6A7F71', textAlign: 'center', paddingHorizontal: 12 },
   errorBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF1F0', borderRadius: 18, padding: 12, marginBottom: 14, gap: 8, borderWidth: 1, borderColor: '#FFD6D2' },
   errorText: { fontSize: 13, color: COLORS.accent, flex: 1, lineHeight: 18 },
-  demoInfoCard: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F2F8EF', borderRadius: 18, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#DCE9D7' },
-  demoInfoIconWrap: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#E4F1DE', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  demoInfoContent: { flex: 1 },
-  demoInfoTitle: { fontSize: 13, fontWeight: '700', color: '#244531', marginBottom: 2 },
-  demoInfoText: { fontSize: 12, lineHeight: 18, color: '#6A7F71' },
   inputLabel: { fontSize: 13, fontWeight: '700', color: '#244531', marginBottom: 8, marginTop: 14 },
   inputShell: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 18, borderWidth: 1, borderColor: '#D9E4D5', paddingHorizontal: 12, minHeight: 56, ...SHADOWS.small },
   inputIconWrap: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#EEF7EB', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
@@ -869,7 +851,7 @@ const styles = StyleSheet.create({
   selectionBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   selectionBtnText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
   selectionBtnTextActive: { color: COLORS.white },
-  otpSection: { alignItems: 'center', marginTop: 10, marginBottom: 2 },
+  otpSection: { alignItems: 'center', marginTop: 12, marginBottom: 4, backgroundColor: '#F7FBF3', borderRadius: 24, borderWidth: 1, borderColor: '#E0EBD8', paddingHorizontal: 14, paddingVertical: 18 },
   otpFieldRow: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
   otpInput: { width: 46, height: 58, borderRadius: 18, backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: '#D7E3D3', fontSize: 24, fontWeight: '800', color: '#173523', ...SHADOWS.small },
   otpInputFilled: { borderColor: COLORS.primary, backgroundColor: '#F4FBF1' },

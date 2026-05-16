@@ -26,6 +26,10 @@ import { consultationToOrder } from '../lib/consultation-orders';
 import { getMobileConsultationById } from '../lib/consultations';
 import { getOrderDisplayCode } from '../lib/order-display';
 import {
+  getMobileProductOrderByCode,
+  type MobileProductOrder,
+} from '../lib/orders';
+import {
   createMidtransPaymentSession,
   getMobilePaymentStatus,
   type MidtransAddressPayload,
@@ -45,6 +49,9 @@ const PAYMENT_LOGOS = [
   { id: 'dana', source: require('../assets/images/logos/dana.png') },
   { id: 'shopeepay', source: require('../assets/images/logos/shopeepay.png') },
 ];
+
+const DEFAULT_PRODUCT_ORDER_IMAGE =
+  'https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=1200&h=800&fit=crop';
 
 type CheckoutLoadRequest = {
   url: string;
@@ -163,6 +170,58 @@ function buildLineItems(order: Order) {
   }
 
   return lineItems;
+}
+
+function buildProductOrderSnapshotJson(order: Order) {
+  if (order.type !== 'product') {
+    return undefined;
+  }
+
+  return JSON.stringify({
+    items: (order.items || []).map((item) => ({
+      productId: item.productId,
+      name: item.name,
+      price: item.price,
+      image: typeof item.image === 'string' ? item.image : undefined,
+      quantity: item.quantity,
+      weight: item.weight,
+      store: item.store,
+    })),
+    address: order.address,
+    store: order.store
+      ? {
+          name: order.store,
+          city: order.address?.city || '',
+          province: order.address?.province || '',
+        }
+      : undefined,
+    courier: order.courier
+      ? {
+          id: order.courier,
+          courierCode: '',
+          courierName: order.courier,
+          service: '',
+          cost: order.shippingCost || 0,
+        }
+      : undefined,
+    fulfillmentMethod: order.fulfillmentMethod || 'delivery',
+    coinRedemptionCost: order.coinRedemptionCost || 0,
+  });
+}
+
+function normalizeMobileProductOrder(order: MobileProductOrder): Order {
+  return {
+    ...order,
+    items: (order.items || []).map((item) => ({
+      productId: item.productId,
+      name: item.name,
+      price: item.price,
+      image: item.image || DEFAULT_PRODUCT_ORDER_IMAGE,
+      quantity: item.quantity,
+      weight: item.weight || 0,
+      store: item.store || order.store || '',
+    })),
+  };
 }
 
 function mapPaymentStatusToOrderStatus(
@@ -384,19 +443,35 @@ export default function PaymentScreen() {
       };
     }
 
-    const loadConsultationOrder = async () => {
+    const loadOrder = async () => {
       try {
         setIsHydratingOrder(true);
-        const consultation = await getMobileConsultationById(authToken, resolvedOrderId);
 
-        if (!isMounted) {
+        try {
+          const productOrder = normalizeMobileProductOrder(
+            await getMobileProductOrderByCode(authToken, resolvedOrderId),
+          );
+
+          if (!isMounted) {
+            return;
+          }
+
+          setHydratedOrder(productOrder);
+          addOrder(productOrder, { silent: true });
+          setOrderLookupError(null);
           return;
-        }
+        } catch {
+          const consultation = await getMobileConsultationById(authToken, resolvedOrderId);
 
-        const nextOrder = consultationToOrder(consultation);
-        setHydratedOrder(nextOrder);
-        addOrder(nextOrder, { silent: true });
-        setOrderLookupError(null);
+          if (!isMounted) {
+            return;
+          }
+
+          const nextOrder = consultationToOrder(consultation);
+          setHydratedOrder(nextOrder);
+          addOrder(nextOrder, { silent: true });
+          setOrderLookupError(null);
+        }
       } catch (error) {
         if (!isMounted) {
           return;
@@ -415,7 +490,7 @@ export default function PaymentScreen() {
       }
     };
 
-    void loadConsultationOrder();
+    void loadOrder();
 
     return () => {
       isMounted = false;
@@ -567,6 +642,11 @@ export default function PaymentScreen() {
               ? 'consultation'
               : order.fulfillmentMethod || 'delivery',
           coinRedemptionCost: order.coinRedemptionCost || 0,
+          ...(order.type === 'product'
+            ? {
+                orderSnapshotJson: buildProductOrderSnapshotJson(order) || '',
+              }
+            : {}),
         },
       }, authToken || undefined);
 
@@ -703,7 +783,7 @@ export default function PaymentScreen() {
         <View style={styles.emptyState}>
           <ActivityIndicator size="small" color={COLORS.primary} />
           <Text style={styles.emptySubtext}>
-            Menyiapkan data konsultasi untuk pembayaran...
+            Menyiapkan data pesanan untuk pembayaran...
           </Text>
         </View>
       </View>
@@ -850,19 +930,27 @@ export default function PaymentScreen() {
           </View>
         ) : null}
 
-        {isExpiredPayment ? (
+        {isExpiredPayment || order.status === 'cancelled' ? (
           <View style={styles.expiredNoticeCard}>
             <View style={styles.expiredNoticeHeader}>
-              <Ionicons name="refresh-circle-outline" size={18} color="#A15C00" />
+              <Ionicons
+                name={order.status === 'cancelled' ? 'close-circle-outline' : 'refresh-circle-outline'}
+                size={18}
+                color={order.status === 'cancelled' ? COLORS.error : '#A15C00'}
+              />
               <Text style={styles.expiredNoticeTitle}>
                 {isExpiredConsultation
                   ? 'Konsultasi ini sudah tidak valid'
+                  : order.status === 'cancelled'
+                  ? 'Transaksi sebelumnya dibatalkan atau ditolak'
                   : 'Metode pembayaran sebelumnya kedaluwarsa'}
               </Text>
             </View>
             <Text style={styles.expiredNoticeText}>
               {isExpiredConsultation
                 ? 'Karena pembayaran tidak diselesaikan tepat waktu, slot konsultasi ini sudah dilepas dan tidak bisa dibayar ulang. Silakan buat konsultasi baru jika masih ingin melanjutkan.'
+                : order.status === 'cancelled'
+                ? 'Transaksi lama tidak bisa dilanjutkan lagi. Tekan tombol utama untuk membuat sesi Midtrans baru dengan detail pesanan yang sama.'
                 : 'Sesi lama sudah tidak bisa dipakai lagi. Tekan tombol utama untuk membuat sesi Midtrans baru dan pilih metode pembayaran yang baru.'}
             </Text>
           </View>

@@ -1,5 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ImageSourcePropType } from 'react-native';
+import {
+  ActivityIndicator,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  ImageSourcePropType,
+  Platform,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
@@ -7,31 +17,19 @@ import { useApp } from '../context/AppContext';
 import { useAlert } from '../context/AlertContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COIN_REWARDS } from '../data/coinRewards';
+import {
+  resolveShippingQuote,
+  type ResolveShippingQuoteResult,
+  type ShippingCourierOption,
+} from '../lib/shipping';
+import { createMidtransPaymentSession } from '../lib/payments';
 
 const COURIER_LOGOS: Record<string, ImageSourcePropType> = {
   jne: require('../assets/images/logos/jne.jpg'),
-  jne_yes: require('../assets/images/logos/jne_yes.jpg'),
   jnt: require('../assets/images/logos/jnt.jpg'),
   sicepat: require('../assets/images/logos/sicepat.jpg'),
-  sicepat_best: require('../assets/images/logos/sicepat_best.jpg'),
   anteraja: require('../assets/images/logos/anteraja.jpg'),
 };
-
-const COURIERS = [
-  { id: 'jne', name: 'JNE Regular', est: '3-4 hari', cost: 15000 },
-  { id: 'jne_yes', name: 'JNE YES', est: '1-2 hari', cost: 25000 },
-  { id: 'jnt', name: 'J&T Express', est: '2-3 hari', cost: 13000 },
-  { id: 'sicepat', name: 'SiCepat REG', est: '2-3 hari', cost: 14000 },
-  { id: 'sicepat_best', name: 'SiCepat BEST', est: '1 hari', cost: 22000 },
-  { id: 'anteraja', name: 'AnterAja Regular', est: '3-5 hari', cost: 12000 },
-];
-
-const STORES = [
-  { id: 's1', name: 'Trubus Store Jakarta', city: 'Jakarta Pusat', type: 'Pusat' },
-  { id: 's2', name: 'Trubus Store Bandung', city: 'Bandung', type: 'Cabang' },
-  { id: 's3', name: 'Trubus Store Surabaya', city: 'Surabaya', type: 'Cabang' },
-  { id: 's4', name: 'Trubus Store Yogyakarta', city: 'Yogyakarta', type: 'Cabang' },
-];
 
 function generateProductOrderCode() {
   const timestamp = Date.now().toString(36).toUpperCase();
@@ -40,15 +38,58 @@ function generateProductOrderCode() {
   return `PROD-${timestamp}-${randomPart}`;
 }
 
+function splitFullName(fullName: string) {
+  const normalized = fullName.trim();
+
+  if (!normalized) {
+    return {
+      firstName: 'Pelanggan',
+      lastName: '',
+    };
+  }
+
+  const parts = normalized.split(/\s+/);
+
+  return {
+    firstName: parts[0] || 'Pelanggan',
+    lastName: parts.slice(1).join(' '),
+  };
+}
+
+function truncateMidtransItemName(name: string, maxLength = 50) {
+  if (name.length <= maxLength) {
+    return name;
+  }
+
+  return `${name.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function mapPaymentStatusToOrderStatus(paymentStatus: 'pending' | 'paid' | 'failed' | 'expired') {
+  switch (paymentStatus) {
+    case 'paid':
+      return 'paid' as const;
+    case 'expired':
+      return 'expired' as const;
+    case 'failed':
+      return 'cancelled' as const;
+    default:
+      return 'pending_payment' as const;
+  }
+}
+
 export default function CheckoutScreen() {
   const router = useRouter();
   const { rewardProductId, coinCost } = useLocalSearchParams<{ rewardProductId?: string; coinCost?: string }>();
-  const { cart, addresses, getCartTotal, addOrder, clearCart, user, setUser } = useApp();
+  const { authToken, cart, addresses, getCartTotal, addOrder, clearCart, user, setUser } = useApp();
   const { showAlert } = useAlert();
   const [selectedAddressId, setSelectedAddressId] = useState(addresses.find(a => a.isDefault)?.id || addresses[0]?.id || '');
   const [selectedCourier, setSelectedCourier] = useState('');
   const [showAddresses, setShowAddresses] = useState(false);
   const [showCouriers, setShowCouriers] = useState(false);
+  const [shippingQuote, setShippingQuote] = useState<ResolveShippingQuoteResult | null>(null);
+  const [shippingQuoteError, setShippingQuoteError] = useState<string | null>(null);
+  const [isShippingQuoteLoading, setIsShippingQuoteLoading] = useState(false);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const insets = useSafeAreaInsets();
   const rewardProduct = rewardProductId ? COIN_REWARDS.find((product) => product.id === rewardProductId) : undefined;
   const rewardCoinCost = Number(coinCost || 0);
@@ -66,8 +107,8 @@ export default function CheckoutScreen() {
     : cart;
 
   const selectedAddress = addresses.find(a => a.id === selectedAddressId);
-  const courier = COURIERS.find(c => c.id === selectedCourier);
-  const store = STORES[0];
+  const courier = shippingQuote?.couriers.find((option) => option.id === selectedCourier);
+  const store = shippingQuote?.selectedStore;
   const subtotal = isRewardCheckout ? 0 : getCartTotal();
   const shippingCost = courier?.cost || 0;
   const total = subtotal + shippingCost;
@@ -96,9 +137,74 @@ export default function CheckoutScreen() {
     );
   }, [addresses, selectedAddressId]);
 
-  const handleOrder = () => {
+  useEffect(() => {
+    if (!authToken || !selectedAddressId) {
+      setShippingQuote(null);
+      setShippingQuoteError(null);
+      setSelectedCourier('');
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadShippingQuote = async () => {
+      setIsShippingQuoteLoading(true);
+      setShippingQuoteError(null);
+
+      try {
+        const nextShippingQuote = await resolveShippingQuote(authToken, {
+          addressId: selectedAddressId,
+        });
+
+        if (!isMounted) {
+          return;
+        }
+
+        setShippingQuote(nextShippingQuote);
+        setSelectedCourier((currentCourier) => {
+          if (
+            currentCourier &&
+            nextShippingQuote.couriers.some((option) => option.id === currentCourier)
+          ) {
+            return currentCourier;
+          }
+
+          return nextShippingQuote.couriers[0]?.id || '';
+        });
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setShippingQuote(null);
+        setSelectedCourier('');
+        setShippingQuoteError(
+          error instanceof Error
+            ? error.message
+            : 'Ongkir belum berhasil dihitung.',
+        );
+      } finally {
+        if (isMounted) {
+          setIsShippingQuoteLoading(false);
+        }
+      }
+    };
+
+    void loadShippingQuote();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authToken, selectedAddressId]);
+
+  const handleOrder = async () => {
     if (isRewardCheckout && user.trubusCoins < rewardCoinCost) {
       showAlert('Coin Tidak Cukup', 'Jumlah Trubus Coin Anda belum mencukupi untuk menukar hadiah ini.');
+      return;
+    }
+
+    if (!authToken) {
+      showAlert('Login Diperlukan', 'Silakan login kembali untuk melanjutkan checkout.');
       return;
     }
 
@@ -106,12 +212,34 @@ export default function CheckoutScreen() {
       showAlert('Peringatan', 'Pilih alamat pengiriman');
       return;
     }
-    if (!selectedCourier) {
-      showAlert('Peringatan', 'Pilih jasa kurir');
+    if (!store) {
+      showAlert('Peringatan', shippingQuoteError || 'Toko pengirim belum berhasil ditentukan.');
+      return;
+    }
+    if (!selectedCourier || !courier) {
+      showAlert('Peringatan', 'Jasa kurir belum tersedia untuk alamat ini.');
       return;
     }
 
     const orderId = generateProductOrderCode();
+    const lineItems = checkoutItems.map((item) => ({
+      id: item.productId,
+      name: truncateMidtransItemName(item.name),
+      price: item.price,
+      quantity: item.quantity,
+      category: 'product',
+    }));
+
+    if (shippingCost > 0) {
+      lineItems.push({
+        id: 'shipping',
+        name: truncateMidtransItemName(`Pengiriman - ${courier.courierName} ${courier.service}`),
+        price: shippingCost,
+        quantity: 1,
+        category: 'shipping',
+      });
+    }
+
     const order = {
       id: orderId,
       orderCode: orderId,
@@ -121,25 +249,103 @@ export default function CheckoutScreen() {
       shippingCost,
       fulfillmentMethod: 'delivery' as const,
       coinRedemptionCost: isRewardCheckout ? rewardCoinCost : undefined,
-      courier: courier?.name || '',
+      courier: `${courier.courierName} ${courier.service}`.trim(),
       address: selectedAddress,
-      store: store?.name || '',
+      store: store.name,
       status: isRewardCheckout && total === 0 ? 'paid' as const : 'pending_payment' as const,
       createdAt: new Date().toISOString(),
     };
 
-    addOrder(order);
-    if (!isRewardCheckout) {
-      clearCart();
-    }
-
     if (isRewardCheckout && total === 0) {
+      addOrder(order);
       setUser({ ...user, trubusCoins: user.trubusCoins - rewardCoinCost });
       router.replace({ pathname: '/order-success', params: { orderId, type: 'product' } });
       return;
     }
 
-    router.push({ pathname: '/payment', params: { orderId } });
+    const { firstName, lastName } = splitFullName(user.name);
+    const shippingAddress = {
+      firstName,
+      lastName: lastName || undefined,
+      email: user.email || undefined,
+      phone: selectedAddress.phone,
+      address: [selectedAddress.address, selectedAddress.additional]
+        .filter((value): value is string => Boolean(value?.trim()))
+        .join(', '),
+      city: selectedAddress.city,
+      postalCode: selectedAddress.postalCode,
+      countryCode: 'IDN',
+    };
+
+    setIsSubmittingOrder(true);
+
+    try {
+      const session = await createMidtransPaymentSession({
+        orderCode: orderId,
+        orderType: 'product',
+        grossAmount: total,
+        shippingAmount: shippingCost,
+        items: lineItems,
+        customer: {
+          firstName,
+          lastName: lastName || undefined,
+          email: user.email || undefined,
+          phone: user.phone,
+        },
+        shippingAddress,
+        metadata: {
+          appPlatform: Platform.OS,
+          fulfillmentMethod: 'delivery',
+          coinRedemptionCost: isRewardCheckout ? rewardCoinCost : 0,
+          orderSnapshotJson: JSON.stringify({
+            items: checkoutItems.map((item) => ({
+              productId: item.productId,
+              name: item.name,
+              price: item.price,
+              image: typeof item.image === 'string' ? item.image : undefined,
+              quantity: item.quantity,
+              weight: item.weight,
+              store: item.store,
+            })),
+            address: selectedAddress,
+            store,
+            courier,
+            subtotal,
+            totalWeight,
+            fulfillmentMethod: 'delivery',
+            coinRedemptionCost: isRewardCheckout ? rewardCoinCost : 0,
+          }),
+        },
+      }, authToken);
+
+      addOrder({
+        ...order,
+        status: mapPaymentStatusToOrderStatus(session.paymentStatus),
+        paymentGateway: 'midtrans',
+        paymentProviderOrderId: session.orderCode,
+        paymentRedirectUrl: session.redirectUrl,
+        paymentMethod: session.paymentMethod || undefined,
+        paymentType: session.paymentType || undefined,
+        paymentExpiresAt: session.expiresAt || undefined,
+        paymentStatusDetail: session.transactionStatus,
+        paymentUpdatedAt: new Date().toISOString(),
+      });
+
+      if (!isRewardCheckout) {
+        await clearCart();
+      }
+
+      router.push({ pathname: '/payment', params: { orderId } });
+    } catch (error) {
+      showAlert(
+        'Checkout Belum Berhasil',
+        error instanceof Error
+          ? error.message
+          : 'Pesanan belum berhasil dibuat. Coba beberapa saat lagi.',
+      );
+    } finally {
+      setIsSubmittingOrder(false);
+    }
   };
 
   if (checkoutItems.length === 0) {
@@ -230,17 +436,31 @@ export default function CheckoutScreen() {
           <View style={styles.cardHeader}>
             <Ionicons name="storefront" size={20} color={COLORS.accentOrange} />
             <Text style={styles.cardTitle}>Toko Pengirim</Text>
-            <View style={[styles.readonlyBadge, store?.type === 'Pusat' && styles.readonlyBadgePusat]}>
-              <Text style={[styles.readonlyBadgeText, store?.type === 'Pusat' && styles.readonlyBadgeTextPusat]}>
-                {store?.type || 'Resmi'}
+            <View style={[styles.readonlyBadge, styles.readonlyBadgeAuto]}>
+              <Text style={[styles.readonlyBadgeText, styles.readonlyBadgeTextAuto]}>
+                Otomatis
               </Text>
             </View>
           </View>
-          {store && (
+          {isShippingQuoteLoading ? (
+            <View style={styles.loadingInlineState}>
+              <ActivityIndicator color={COLORS.primary} />
+              <Text style={styles.loadingInlineText}>Menentukan toko terdekat...</Text>
+            </View>
+          ) : store ? (
             <View style={styles.addressPreview}>
               <Text style={styles.addressName}>{store.name}</Text>
-              <Text style={styles.addressText}>{store.city}</Text>
+              <Text style={styles.addressText}>
+                {store.city}, {store.province}
+              </Text>
+              <Text style={styles.addressMetaText}>
+                Jarak sekitar {store.distanceKm.toFixed(1)} km dari titik alamat.
+              </Text>
             </View>
+          ) : (
+            <Text style={styles.errorText}>
+              {shippingQuoteError || 'Toko pengirim belum tersedia.'}
+            </Text>
           )}
         </View>
 
@@ -250,19 +470,30 @@ export default function CheckoutScreen() {
             <Text style={styles.cardTitle}>Jasa Pengiriman</Text>
             <Ionicons name={showCouriers ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textLight} />
           </View>
-          {courier ? (
-            <View style={styles.addressPreview}>
-              <Text style={styles.addressName}>{courier.name}</Text>
-              <Text style={styles.addressText}>Estimasi: {courier.est} | Rp {courier.cost.toLocaleString('id-ID')}</Text>
+          {isShippingQuoteLoading ? (
+            <View style={styles.loadingInlineState}>
+              <ActivityIndicator color={COLORS.primary} />
+              <Text style={styles.loadingInlineText}>Mengambil opsi ongkir...</Text>
             </View>
+          ) : courier ? (
+            <View style={styles.addressPreview}>
+              <Text style={styles.addressName}>
+                {courier.courierName} - {courier.service}
+              </Text>
+              <Text style={styles.addressText}>
+                Estimasi: {courier.etd} | Rp {courier.cost.toLocaleString('id-ID')}
+              </Text>
+            </View>
+          ) : shippingQuoteError ? (
+            <Text style={styles.errorText}>{shippingQuoteError}</Text>
           ) : (
             <Text style={styles.selectText}>Pilih jasa pengiriman</Text>
           )}
         </TouchableOpacity>
 
-        {showCouriers && (
+        {showCouriers && shippingQuote?.couriers?.length ? (
           <View style={styles.optionList}>
-            {COURIERS.map((c) => (
+            {shippingQuote.couriers.map((c: ShippingCourierOption) => (
               <TouchableOpacity
                 key={c.id}
                 style={[styles.optionItem, selectedCourier === c.id && styles.optionItemActive]}
@@ -271,18 +502,26 @@ export default function CheckoutScreen() {
                 <View style={styles.optionRadio}>
                   {selectedCourier === c.id && <View style={styles.optionRadioInner} />}
                 </View>
-                {COURIER_LOGOS[c.id] && (
-                  <Image source={COURIER_LOGOS[c.id]} style={styles.courierLogo} resizeMode="contain" />
+                {COURIER_LOGOS[c.courierCode] && (
+                  <Image
+                    source={COURIER_LOGOS[c.courierCode]}
+                    style={styles.courierLogo}
+                    resizeMode="contain"
+                  />
                 )}
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.optionLabel}>{c.name}</Text>
-                  <Text style={styles.optionText}>Estimasi: {c.est}</Text>
+                  <Text style={styles.optionLabel}>
+                    {c.courierName} - {c.service}
+                  </Text>
+                  <Text style={styles.optionText}>
+                    {c.description} • Estimasi {c.etd}
+                  </Text>
                 </View>
                 <Text style={styles.courierCost}>Rp {c.cost.toLocaleString('id-ID')}</Text>
               </TouchableOpacity>
             ))}
           </View>
-        )}
+        ) : null}
 
         {/* Order Items */}
         <View style={styles.card}>
@@ -332,8 +571,16 @@ export default function CheckoutScreen() {
           <Text style={styles.bottomLabel}>{isRewardCheckout ? 'Ongkir / Total' : 'Total'}</Text>
           <Text style={styles.bottomPrice}>Rp {total.toLocaleString('id-ID')}</Text>
         </View>
-        <TouchableOpacity style={styles.orderBtn} onPress={handleOrder}>
-          <Text style={styles.orderBtnText}>{isRewardCheckout ? 'Lanjut Penukaran' : 'Buat Pesanan'}</Text>
+        <TouchableOpacity
+          style={[styles.orderBtn, isSubmittingOrder && styles.orderBtnDisabled]}
+          onPress={() => { void handleOrder(); }}
+          disabled={isSubmittingOrder}
+        >
+          {isSubmittingOrder ? (
+            <ActivityIndicator color={COLORS.white} />
+          ) : (
+            <Text style={styles.orderBtnText}>{isRewardCheckout ? 'Lanjut Penukaran' : 'Buat Pesanan'}</Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -383,7 +630,11 @@ const styles = StyleSheet.create({
   addressLabel: { fontSize: 12, fontWeight: '600', color: COLORS.primary, marginBottom: 2 },
   addressName: { fontSize: 13, fontWeight: '600', color: COLORS.text },
   addressText: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+  addressMetaText: { fontSize: 11, color: COLORS.textLight, marginTop: 4 },
   selectText: { fontSize: 13, color: COLORS.textLight, marginTop: 8, marginLeft: 28 },
+  errorText: { fontSize: 13, color: COLORS.accentOrange, marginTop: 8, marginLeft: 28, lineHeight: 18 },
+  loadingInlineState: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10, marginLeft: 28 },
+  loadingInlineText: { fontSize: 12, color: COLORS.textSecondary },
   optionList: {
     backgroundColor: COLORS.white, marginHorizontal: SPACING.lg, marginTop: 2,
     borderRadius: RADIUS.md, ...SHADOWS.small, overflow: 'hidden',
@@ -416,12 +667,18 @@ const styles = StyleSheet.create({
   readonlyBadgePusat: {
     backgroundColor: '#E8F5E9',
   },
+  readonlyBadgeAuto: {
+    backgroundColor: '#E8F5E9',
+  },
   readonlyBadgeText: {
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.accentOrange,
   },
   readonlyBadgeTextPusat: {
+    color: COLORS.primary,
+  },
+  readonlyBadgeTextAuto: {
     color: COLORS.primary,
   },
   orderItem: {
@@ -450,6 +707,9 @@ const styles = StyleSheet.create({
   orderBtn: {
     backgroundColor: COLORS.primary, borderRadius: RADIUS.md,
     paddingHorizontal: 28, paddingVertical: 14,
+  },
+  orderBtnDisabled: {
+    opacity: 0.7,
   },
   orderBtnText: { color: COLORS.white, fontSize: 15, fontWeight: '700' },
 });

@@ -1,9 +1,6 @@
 import type { Address } from '../types/address';
+import { MOBILE_API_BASE_URL } from './api-config';
 import { normalizeIndonesianMobilePhone } from './auth';
-
-const MOBILE_API_BASE_URL = (
-  process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:5000'
-).replace(/\/$/, '');
 
 type ApiEnvelope<T> = {
   data: T;
@@ -47,6 +44,8 @@ export type BackendMobileUserAddress = {
   updatedAt: string;
   address: string;
   additional?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
   isPrimary: boolean;
   label?: string | null;
   recipientName?: string | null;
@@ -60,6 +59,8 @@ export type CreateMobileUserAddressPayload = {
   phone: string;
   address: string;
   additional?: string;
+  latitude: number;
+  longitude: number;
   rajaOngkirSubDistrictId: number;
   isPrimary?: boolean;
 };
@@ -94,6 +95,17 @@ function formatErrorMessage(payload: unknown, status: number) {
   }
 
   return `Request failed with ${status}`;
+}
+
+function parseCoordinate(value: number | string | null | undefined) {
+  if (value === null || value === undefined || value === '') {
+    return undefined;
+  }
+
+  const parsedValue =
+    typeof value === 'number' ? value : Number.parseFloat(String(value));
+
+  return Number.isFinite(parsedValue) ? parsedValue : undefined;
 }
 
 function buildHeaders(accessToken: string, init?: RequestInit) {
@@ -169,6 +181,8 @@ export function mapBackendUserAddressToAddress(
     phone: backendAddress.phone?.trim() || '',
     address: backendAddress.address,
     additional: backendAddress.additional?.trim() || undefined,
+    latitude: parseCoordinate(backendAddress.latitude),
+    longitude: parseCoordinate(backendAddress.longitude),
     city: city?.name || '',
     province: province?.name || '',
     district: district?.name || '',
@@ -189,6 +203,8 @@ function normalizeCreatePayload(payload: CreateMobileUserAddressPayload) {
     phone: normalizeIndonesianMobilePhone(payload.phone),
     address: payload.address.trim(),
     additional: payload.additional?.trim() || undefined,
+    latitude: payload.latitude,
+    longitude: payload.longitude,
     rajaOngkirSubDistrictId: payload.rajaOngkirSubDistrictId,
     isPrimary: payload.isPrimary,
   };
@@ -201,6 +217,8 @@ function normalizeUpdatePayload(payload: UpdateMobileUserAddressPayload) {
     phone: payload.phone ? normalizeIndonesianMobilePhone(payload.phone) : undefined,
     address: payload.address?.trim(),
     additional: payload.additional?.trim() || undefined,
+    latitude: payload.latitude,
+    longitude: payload.longitude,
     rajaOngkirSubDistrictId: payload.rajaOngkirSubDistrictId,
     isPrimary: payload.isPrimary,
   };

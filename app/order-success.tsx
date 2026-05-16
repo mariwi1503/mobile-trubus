@@ -5,6 +5,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { getOrderDisplayCode } from '../lib/order-display';
+import { isOrderAwaitingPayment } from '../lib/order-status';
 
 export default function OrderSuccessScreen() {
   const router = useRouter();
@@ -14,15 +15,36 @@ export default function OrderSuccessScreen() {
   const order = orders.find(o => o.id === orderId);
   const isConsultation = type === 'consultation';
   const resolvedStatus = typeof status === 'string' ? status : order?.status;
-  const isAwaitingPayment = resolvedStatus === 'draft' || resolvedStatus === 'pending_payment';
+  const isAwaitingPayment = isOrderAwaitingPayment(resolvedStatus as string | undefined);
+  const isExpired = resolvedStatus === 'expired';
+  const isCancelled = resolvedStatus === 'cancelled';
   const isCoinRedemption = Boolean(order?.coinRedemptionCost);
-  const shouldOfferPaymentAction = allowPaymentAction !== 'false' && isAwaitingPayment;
+  const shouldOfferPaymentAction = allowPaymentAction !== 'false'
+    && (isAwaitingPayment || ((!isConsultation) && (isExpired || isCancelled)));
   const displayOrderCode = getOrderDisplayCode(order, typeof orderId === 'string' ? orderId : undefined);
 
-  const iconName = isAwaitingPayment ? 'time' : 'checkmark';
-  const iconBg = isAwaitingPayment ? '#FFF3E0' : COLORS.primaryBg;
-  const iconInnerBg = isAwaitingPayment ? COLORS.accentOrange : COLORS.primary;
-  const title = isAwaitingPayment
+  const iconName = isExpired
+    ? 'time'
+    : isCancelled
+    ? 'close'
+    : isAwaitingPayment
+    ? 'time'
+    : 'checkmark';
+  const iconBg = isExpired || isAwaitingPayment
+    ? '#FFF3E0'
+    : isCancelled
+    ? '#FFEBEE'
+    : COLORS.primaryBg;
+  const iconInnerBg = isExpired || isAwaitingPayment
+    ? COLORS.accentOrange
+    : isCancelled
+    ? COLORS.error
+    : COLORS.primary;
+  const title = isExpired
+    ? 'Sesi Pembayaran Kedaluwarsa'
+    : isCancelled
+    ? 'Transaksi Dibatalkan'
+    : isAwaitingPayment
     ? isConsultation
       ? 'Konsultasi Berhasil Dibuat'
       : 'Pesanan Menunggu Pembayaran'
@@ -31,7 +53,11 @@ export default function OrderSuccessScreen() {
     : isConsultation
     ? 'Konsultasi Berhasil!'
     : 'Pembayaran Berhasil!';
-  const subtitle = isAwaitingPayment
+  const subtitle = isExpired
+    ? 'Sesi pembayaran sebelumnya sudah berakhir. Anda masih bisa membuat sesi pembayaran baru dari halaman pembayaran.'
+    : isCancelled
+    ? 'Transaksi sebelumnya tidak berhasil dilanjutkan. Anda masih bisa membuat sesi pembayaran baru untuk pesanan ini.'
+    : isAwaitingPayment
     ? isConsultation
       ? 'Jadwal konsultasi Anda sudah kami catat. Pembayaran akan kita lanjutkan di tahap berikutnya.'
       : 'Pesananmu sudah kami catat. Segera selesaikan pembayaran agar pesanan dapat diproses.'
@@ -96,7 +122,9 @@ export default function OrderSuccessScreen() {
             onPress={() => router.push({ pathname: '/payment', params: { orderId: orderId as string } })}
           >
             <Ionicons name="wallet-outline" size={18} color={COLORS.white} />
-            <Text style={styles.payBtnText}>Lanjut Bayar Sekarang</Text>
+            <Text style={styles.payBtnText}>
+              {isExpired || isCancelled ? 'Buat Sesi Bayar Baru' : 'Lanjut Bayar Sekarang'}
+            </Text>
           </TouchableOpacity>
         )}
 

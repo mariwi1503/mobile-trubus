@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, ActivityIndicator, RefreshControl, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import ProductCard from '../../components/ProductCard';
 import SearchBar from '../../components/SearchBar';
 import { useApp } from '../../context/AppContext';
+import { useCartAnimation } from '../../context/CartAnimationContext';
 import {
   getMobileProductCategories,
   getMobileProducts,
@@ -50,6 +51,7 @@ export default function CatalogScreen() {
   const router = useRouter();
   const { category } = useLocalSearchParams<{ category?: string }>();
   const { getCartCount } = useApp();
+  const { setCartTarget } = useCartAnimation();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -60,6 +62,7 @@ export default function CatalogScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const cartPulse = useState(() => new Animated.Value(0))[0];
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -166,6 +169,25 @@ export default function CatalogScreen() {
 
   const categoryOptions = [...STATIC_CATEGORY_OPTIONS, ...categories];
   const isRefreshing = loading && products.length > 0;
+  const triggerCartImpact = useCallback(() => {
+    cartPulse.stopAnimation();
+    cartPulse.setValue(0);
+    Animated.sequence([
+      Animated.timing(cartPulse, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(cartPulse, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [cartPulse]);
+  const setCartTargetNode = useCallback((node: View | null) => {
+    setCartTarget('default', node, triggerCartImpact);
+  }, [setCartTarget, triggerCartImpact]);
 
   return (
     <View style={styles.container}>
@@ -173,14 +195,50 @@ export default function CatalogScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.headerTitle}>Katalog Produk</Text>
-          <TouchableOpacity style={styles.cartBtn} onPress={() => router.push('/cart')}>
-            <Ionicons name="cart-outline" size={24} color={COLORS.white} />
-            {getCartCount() > 0 && (
-              <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>{getCartCount()}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <Animated.View
+            style={[
+              styles.cartBtnWrap,
+              {
+                transform: [
+                  {
+                    scale: cartPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.16],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <TouchableOpacity ref={setCartTargetNode} style={styles.cartBtn} onPress={() => router.push('/cart')}>
+              <Ionicons name="cart-outline" size={24} color={COLORS.white} />
+              {getCartCount() > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{getCartCount()}</Text>
+                </View>
+              )}
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.cartImpactGlow,
+                  {
+                    opacity: cartPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, 0.3],
+                    }),
+                    transform: [
+                      {
+                        scale: cartPulse.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.7, 1.22],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+            </TouchableOpacity>
+          </Animated.View>
         </View>
         <View style={styles.searchWrap}>
           <SearchBar value={search} onChangeText={setSearch} placeholder="Cari produk favorit..." />
@@ -331,7 +389,17 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.white
   },
+  cartBtnWrap: { borderRadius: 999 },
   cartBtn: { position: 'relative' },
+  cartImpactGlow: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    bottom: -8,
+    left: -8,
+    borderRadius: 999,
+    backgroundColor: COLORS.white,
+  },
   cartBadge: {
     position: 'absolute', top: -5, right: -8,
     backgroundColor: COLORS.accent, borderRadius: 10, minWidth: 18, height: 18,

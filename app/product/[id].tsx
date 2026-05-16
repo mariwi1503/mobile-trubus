@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, RefreshControl, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
+import { useCartAnimation } from '../../context/CartAnimationContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getMobileProductById, getMobileProducts } from '../../lib/products';
 import { Product } from '../../types/product';
+import AddToCartButton from '../../components/AddToCartButton';
 
 async function loadProductDetailData(productId: string) {
   const currentProduct = await getMobileProductById(productId);
@@ -35,7 +37,8 @@ async function loadProductDetailData(productId: string) {
 export default function ProductDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const { addToCart, wishlist, toggleWishlist, getCartCount } = useApp();
+  const { addToCart, isLoggedIn, wishlist, toggleWishlist, getCartCount } = useApp();
+  const { setCartTarget, animateToCart } = useCartAnimation();
   const [quantity, setQuantity] = useState(1);
   const [product, setProduct] = useState<Product | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
@@ -44,6 +47,28 @@ export default function ProductDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const insets = useSafeAreaInsets();
   const productId = Array.isArray(id) ? id[0] : id;
+  const cartCount = getCartCount();
+  const productImageRef = useRef<View | null>(null);
+  const cartImpactAnim = useRef(new Animated.Value(0)).current;
+  const triggerCartImpact = useCallback(() => {
+    cartImpactAnim.stopAnimation();
+    cartImpactAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(cartImpactAnim, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(cartImpactAnim, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [cartImpactAnim]);
+  const setCartTargetNode = useCallback((node: View | null) => {
+    setCartTarget('default', node, triggerCartImpact);
+  }, [setCartTarget, triggerCartImpact]);
 
   useEffect(() => {
     let isMounted = true;
@@ -112,8 +137,13 @@ export default function ProductDetailScreen() {
     ? { uri: product.originalImage }
     : product.originalImage;
 
-  const handleAddToCart = () => {
-    addToCart({
+  const handleAddToCart = async () => {
+    if (!isLoggedIn) {
+      router.push({ pathname: '/(tabs)/profile', params: { login: '1' } });
+      return false;
+    }
+
+    return addToCart({
       productId: product.id,
       name: product.name,
       price: product.price,
@@ -122,10 +152,6 @@ export default function ProductDetailScreen() {
       weight: product.weight,
       store: product.store,
     });
-    Alert.alert('Berhasil', `${product.name} ditambahkan ke keranjang`, [
-      { text: 'Lanjut Belanja', style: 'cancel' },
-      { text: 'Lihat Keranjang', onPress: () => router.push('/cart') },
-    ]);
   };
 
   const handleRefresh = async () => {
@@ -158,14 +184,47 @@ export default function ProductDetailScreen() {
           <TouchableOpacity style={styles.headerBtn} onPress={() => toggleWishlist(product.id)}>
             <Ionicons name={isWished ? 'heart' : 'heart-outline'} size={22} color={isWished ? COLORS.accent : COLORS.text} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerBtn} onPress={() => router.push('/cart')}>
-            <Ionicons name="cart-outline" size={22} color={COLORS.text} />
-            {getCartCount() > 0 && (
-              <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>{getCartCount()}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <Animated.View
+            style={{
+              transform: [
+                {
+                  scale: cartImpactAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 1.16],
+                  }),
+                },
+              ],
+            }}
+          >
+            <TouchableOpacity ref={setCartTargetNode} style={styles.headerBtn} onPress={() => router.push('/cart')}>
+              <Ionicons name="cart-outline" size={22} color={COLORS.text} />
+              {cartCount > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{cartCount}</Text>
+                </View>
+              )}
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.cartImpactGlow,
+                  {
+                    opacity: cartImpactAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, 0.22],
+                    }),
+                    transform: [
+                      {
+                        scale: cartImpactAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.72, 1.2],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       </View>
 
@@ -183,7 +242,9 @@ export default function ProductDetailScreen() {
         }
       >
         {/* Product Image */}
-        <Image source={imageSource} style={styles.productImage} />
+        <View ref={productImageRef}>
+          <Image source={imageSource} style={styles.productImage} />
+        </View>
 
         {/* Product Info */}
         <View style={styles.infoSection}>
@@ -254,10 +315,22 @@ export default function ProductDetailScreen() {
             <Ionicons name="add" size={18} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.addToCartBtn} onPress={handleAddToCart}>
-          <Ionicons name="cart" size={18} color={COLORS.white} />
-          <Text style={styles.addToCartText}>Tambah ke Keranjang</Text>
-        </TouchableOpacity>
+        <AddToCartButton
+          label="Tambah ke Keranjang"
+          loadingLabel="Menambahkan..."
+          idleIcon="cart"
+          iconSize={18}
+          containerStyle={styles.addToCartBtn}
+          textStyle={styles.addToCartText}
+          disableSuccessFeedback
+          onAdd={handleAddToCart}
+          onSuccess={async () => {
+            await animateToCart({
+              sourceNode: productImageRef.current,
+              imageSource,
+            });
+          }}
+        />
       </View>
     </View>
   );
@@ -282,6 +355,15 @@ const styles = StyleSheet.create({
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center',
     ...SHADOWS.small, position: 'relative',
+  },
+  cartImpactGlow: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    bottom: -8,
+    left: -8,
+    borderRadius: 999,
+    backgroundColor: COLORS.primary,
   },
   headerRight: { flexDirection: 'row', gap: 8 },
   cartBadge: {

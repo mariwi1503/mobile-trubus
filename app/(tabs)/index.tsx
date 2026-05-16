@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Animated, Modal, Linking, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useRouter } from 'expo-router';
@@ -6,9 +6,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, RADIUS, SHADOWS, SPACING, CARD_WIDTH } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
+import { useCartAnimation } from '../../context/CartAnimationContext';
 import ProductCard from '../../components/ProductCard';
 import ExpertCard from '../../components/ExpertCard';
 import ArticleCard from '../../components/ArticleCard';
+import { MOBILE_API_BASE_URL } from '../../lib/api-config';
 import { getMobileArticles } from '../../lib/articles';
 import { getMobileExperts } from '../../lib/experts';
 import { Article } from '../../types/article';
@@ -42,10 +44,6 @@ type MobileInterstitialAdResponse = {
   isPortalEnabled: boolean;
   isMobileEnabled: boolean;
 };
-
-const MOBILE_API_BASE_URL = (
-  process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:5000'
-).replace(/\/$/, '');
 
 const MOBILE_INTERSTITIAL_API_URL = `${MOBILE_API_BASE_URL}/api/v1/mobile/interstitial-ad`;
 
@@ -121,6 +119,7 @@ function ConsumerHomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, getCartCount, getUnreadCount } = useApp();
+  const { setCartTarget } = useCartAnimation();
 
   const [interstitialVisible, setInterstitialVisible] = useState(false);
   const [interstitialAd, setInterstitialAd] =
@@ -137,6 +136,26 @@ function ConsumerHomeScreen() {
   const [productsError, setProductsError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
+  const cartImpactAnim = React.useRef(new Animated.Value(0)).current;
+  const triggerCartImpact = useCallback(() => {
+    cartImpactAnim.stopAnimation();
+    cartImpactAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(cartImpactAnim, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(cartImpactAnim, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [cartImpactAnim]);
+  const setCartTargetNode = useCallback((node: View | null) => {
+    setCartTarget('default', node, triggerCartImpact);
+  }, [setCartTarget, triggerCartImpact]);
 
   useEffect(() => {
     let isMounted = true;
@@ -414,14 +433,47 @@ function ConsumerHomeScreen() {
                 </View>
               )}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/cart')}>
-              <Ionicons name="cart-outline" size={22} color={COLORS.white} />
-              {getCartCount() > 0 && (
-                <View style={styles.notifBadge}>
-                  <Text style={styles.notifBadgeText}>{getCartCount()}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            <Animated.View
+              style={{
+                transform: [
+                  {
+                    scale: cartImpactAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.16],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <TouchableOpacity ref={setCartTargetNode} style={styles.iconBtn} onPress={() => router.push('/cart')}>
+                <Ionicons name="cart-outline" size={22} color={COLORS.white} />
+                {getCartCount() > 0 && (
+                  <View style={styles.notifBadge}>
+                    <Text style={styles.notifBadgeText}>{getCartCount()}</Text>
+                  </View>
+                )}
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.iconImpactGlow,
+                    {
+                      opacity: cartImpactAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, 0.28],
+                      }),
+                      transform: [
+                        {
+                          scale: cartImpactAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.72, 1.22],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                />
+              </TouchableOpacity>
+            </Animated.View>
           </View>
         </View>
       </View>
@@ -720,6 +772,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  iconImpactGlow: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    bottom: -8,
+    left: -8,
+    borderRadius: 999,
+    backgroundColor: COLORS.white,
   },
   notifBadge: {
     position: 'absolute', top: -4, right: -4,

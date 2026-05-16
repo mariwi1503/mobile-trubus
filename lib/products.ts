@@ -1,8 +1,5 @@
 import { Product, ProductCategory } from '../types/product';
-
-const MOBILE_API_BASE_URL = (
-  process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:5000'
-).replace(/\/$/, '');
+import { MOBILE_API_BASE_URL } from './api-config';
 
 const DEFAULT_PRODUCT_IMAGE =
   'https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=1200&h=800&fit=crop';

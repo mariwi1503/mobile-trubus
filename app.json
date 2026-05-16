@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Halo Trubus",
-    "slug": "halo-trubus",
+    "slug": "agriculture-consultation-shopping",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Lokasi digunakan untuk membantu mengisi provinsi, kota, kecamatan, dan kelurahan saat menambahkan alamat."
+        "NSLocationWhenInUseUsageDescription": "Lokasi digunakan untuk membantu mengisi alamat dan menghitung toko terdekat dari posisi perangkat."
       }
     },
     "android": {
@@ -46,7 +46,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Lokasi digunakan untuk membantu mengisi provinsi, kota, kecamatan, dan kelurahan saat menambahkan alamat."
+          "locationWhenInUsePermission": "Lokasi digunakan untuk membantu mengisi alamat dan menghitung toko terdekat dari posisi perangkat."
         }
       ],
       "expo-image-picker"
@@ -62,6 +62,7 @@
       "eas": {
         "projectId": "cadc5dab-88a9-484a-b5f2-0e82e8b800ad"
       }
-    }
+    },
+    "owner": "mariwi"
   }
 }

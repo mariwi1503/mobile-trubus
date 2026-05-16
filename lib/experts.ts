@@ -1,8 +1,5 @@
 import { Expert, ExpertCategory, ExpertSlot } from '../types/expert';
-
-const MOBILE_API_BASE_URL = (
-  process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:5000'
-).replace(/\/$/, '');
+import { MOBILE_API_BASE_URL } from './api-config';
 
 const DEFAULT_EXPERT_IMAGE = 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=400&h=400&fit=crop';
 

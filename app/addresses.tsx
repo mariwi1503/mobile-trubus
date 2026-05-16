@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,32 +9,60 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
+import { getMobileStores } from '../lib/stores';
+import type { Store } from '../types/store';
 
 type ActiveTab = 'alamat' | 'toko';
 
-const NEARBY_STORES = [
-  {
-    id: 'store_1',
-    name: 'Trubus Menteng',
-    distance: '1.2 km',
-    address: 'Jl. HOS Cokroaminoto No. 72, Menteng',
-  },
-  {
-    id: 'store_2',
-    name: 'Trubus Depok',
-    distance: '4.8 km',
-    address: 'Jl. Margonda Raya No. 211, Kemiri Muka',
-  },
-  {
-    id: 'store_3',
-    name: 'Trubus Bintaro',
-    distance: '7.3 km',
-    address: 'Jl. Boulevard Bintaro Jaya Blok RA 11',
-  },
-];
+const EARTH_RADIUS_KM = 6371;
+
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
+}
+
+function calculateDistanceKm(
+  originLatitude: number,
+  originLongitude: number,
+  destinationLatitude: number,
+  destinationLongitude: number,
+) {
+  const latitudeDistance = toRadians(destinationLatitude - originLatitude);
+  const longitudeDistance = toRadians(destinationLongitude - originLongitude);
+
+  const haversineValue =
+    Math.sin(latitudeDistance / 2) ** 2 +
+    Math.cos(toRadians(originLatitude)) *
+      Math.cos(toRadians(destinationLatitude)) *
+      Math.sin(longitudeDistance / 2) ** 2;
+
+  return (
+    2 *
+    EARTH_RADIUS_KM *
+    Math.atan2(Math.sqrt(haversineValue), Math.sqrt(1 - haversineValue))
+  );
+}
+
+function formatStoreDistance(distanceKm?: number) {
+  if (distanceKm === undefined) {
+    return 'Jarak belum tersedia';
+  }
+
+  if (distanceKm < 1) {
+    return `${Math.round(distanceKm * 1000)} m`;
+  }
+
+  return `${distanceKm.toFixed(1)} km`;
+}
+
+function formatStoreArea(store: Store) {
+  return [store.subDistrict, store.city, store.province]
+    .filter((value) => value.trim().length > 0)
+    .join(', ');
+}
 
 export default function AddressesScreen() {
   const router = useRouter();
@@ -47,7 +75,17 @@ export default function AddressesScreen() {
     setDefaultAddress,
   } = useApp();
   const [activeTab, setActiveTab] = useState<ActiveTab>('alamat');
-  const [selectedStoreId, setSelectedStoreId] = useState(NEARBY_STORES[0].id);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [isStoresLoading, setIsStoresLoading] = useState(true);
+  const [storesError, setStoresError] = useState<string | null>(null);
+  const [deviceLocation, setDeviceLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [isLocationLoading, setIsLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [selectedStoreId, setSelectedStoreId] = useState('');
+  const [storesRequestVersion, setStoresRequestVersion] = useState(0);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -58,6 +96,131 @@ export default function AddressesScreen() {
       // Keep the last known address list if refresh fails.
     });
   }, [isLoggedIn, refreshAddresses]);
+
+  const loadCurrentLocation = useCallback(async () => {
+    setIsLocationLoading(true);
+    setLocationError(null);
+
+    try {
+      const currentPermission =
+        await Location.getForegroundPermissionsAsync();
+      let permissionStatus = currentPermission.status;
+
+      if (permissionStatus !== 'granted') {
+        const requestedPermission =
+          await Location.requestForegroundPermissionsAsync();
+        permissionStatus = requestedPermission.status;
+      }
+
+      if (permissionStatus !== 'granted') {
+        throw new Error(
+          'Izin lokasi dibutuhkan untuk menghitung toko terdekat dari posisi perangkat.',
+        );
+      }
+
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      setDeviceLocation({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+    } catch (error) {
+      setDeviceLocation(null);
+      setLocationError(
+        error instanceof Error
+          ? error.message
+          : 'Lokasi perangkat belum berhasil diambil.',
+      );
+    } finally {
+      setIsLocationLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    void (async () => {
+      try {
+        if (isMounted) {
+          setIsStoresLoading(true);
+          setStoresError(null);
+        }
+
+        const response = await getMobileStores({ page: 1, perPage: 100 });
+
+        if (!isMounted) {
+          return;
+        }
+
+        setStores(response.stores);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setStoresError(
+          error instanceof Error ? error.message : 'Daftar toko belum berhasil dimuat.',
+        );
+      } finally {
+        if (isMounted) {
+          setIsStoresLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [storesRequestVersion]);
+
+  useEffect(() => {
+    if (activeTab !== 'toko' || deviceLocation || isLocationLoading) {
+      return;
+    }
+
+    void loadCurrentLocation();
+  }, [activeTab, deviceLocation, isLocationLoading, loadCurrentLocation]);
+
+  const hasReferenceLocation = Boolean(deviceLocation);
+  const nearbyStores = [...stores]
+    .map((store) => ({
+      ...store,
+      distanceKm:
+        deviceLocation &&
+        typeof store.latitude === 'number' &&
+        typeof store.longitude === 'number'
+          ? calculateDistanceKm(
+              deviceLocation.latitude,
+              deviceLocation.longitude,
+              store.latitude,
+              store.longitude,
+            )
+          : undefined,
+    }))
+    .sort((left, right) => {
+      if (left.distanceKm !== undefined && right.distanceKm !== undefined) {
+        if (left.distanceKm !== right.distanceKm) {
+          return left.distanceKm - right.distanceKm;
+        }
+      } else if (left.distanceKm !== undefined) {
+        return -1;
+      } else if (right.distanceKm !== undefined) {
+        return 1;
+      }
+
+      return left.name.localeCompare(right.name);
+    });
+  const effectiveSelectedStoreId =
+    nearbyStores.some((store) => store.id === selectedStoreId)
+      ? selectedStoreId
+      : nearbyStores[0]?.id;
+
+  const handleRefreshStores = () => {
+    setStoresRequestVersion((value) => value + 1);
+    void loadCurrentLocation();
+  };
 
   const handleDelete = (id: string, label: string) => {
     Alert.alert('Hapus Alamat', `Hapus alamat "${label}"?`, [
@@ -249,10 +412,65 @@ export default function AddressesScreen() {
           renderAddressesContent()
         ) : (
           <View>
-            <Text style={styles.sectionTitle}>Daftar toko terdekat</Text>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeading}>
+                <Text style={styles.sectionTitle}>Daftar toko terdekat</Text>
+                <Text style={styles.sectionDescription}>
+                  {hasReferenceLocation
+                    ? 'Diurutkan dari current location perangkat Anda.'
+                    : isLocationLoading
+                      ? 'Mengambil current location perangkat untuk menghitung jarak toko.'
+                      : 'Aktifkan izin lokasi agar toko diurutkan dari current location perangkat.'}
+                </Text>
+              </View>
 
-            {NEARBY_STORES.map((store) => {
-              const selected = selectedStoreId === store.id;
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={handleRefreshStores}
+              >
+                <Ionicons name="refresh" size={16} color={COLORS.primary} />
+                <Text style={styles.addButtonText}>Muat ulang</Text>
+              </TouchableOpacity>
+            </View>
+
+            {storesError ? (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle-outline" size={18} color={COLORS.accent} />
+                <Text style={styles.errorBannerText}>{storesError}</Text>
+              </View>
+            ) : null}
+
+            {locationError ? (
+              <View style={styles.errorBanner}>
+                <Ionicons name="locate-outline" size={18} color={COLORS.accent} />
+                <Text style={styles.errorBannerText}>{locationError}</Text>
+              </View>
+            ) : null}
+
+            {isStoresLoading || isLocationLoading ? (
+              <View style={styles.loadingState}>
+                <ActivityIndicator color={COLORS.primary} />
+                <Text style={styles.loadingText}>
+                  {isStoresLoading
+                    ? 'Memuat daftar toko dari server...'
+                    : 'Mengambil current location perangkat...'}
+                </Text>
+              </View>
+            ) : null}
+
+            {!isStoresLoading && nearbyStores.length === 0 ? (
+              <View style={styles.empty}>
+                <Ionicons name="storefront-outline" size={42} color={COLORS.textLight} />
+                <Text style={styles.emptyTitle}>Belum ada toko tersedia</Text>
+                <Text style={styles.emptyDescription}>
+                  Data toko aktif dari backend belum tersedia untuk aplikasi mobile.
+                </Text>
+              </View>
+            ) : null}
+
+            {!isStoresLoading && nearbyStores.map((store) => {
+              const selected = effectiveSelectedStoreId === store.id;
+              const areaLabel = formatStoreArea(store);
 
               return (
                 <TouchableOpacity
@@ -270,7 +488,9 @@ export default function AddressesScreen() {
                       />
                       <View style={styles.cardBody}>
                         <Text style={styles.addressLabel}>{store.name}</Text>
-                        <Text style={styles.addressMeta}>{store.distance}</Text>
+                        <Text style={styles.addressMeta}>
+                          {formatStoreDistance(store.distanceKm)}
+                        </Text>
                       </View>
                     </View>
 
@@ -280,6 +500,15 @@ export default function AddressesScreen() {
                   </View>
 
                   <Text style={styles.addressText}>{store.address}</Text>
+                  {areaLabel ? (
+                    <Text style={styles.cityText}>
+                      {areaLabel}
+                      {store.postalCode ? ` ${store.postalCode}` : ''}
+                    </Text>
+                  ) : null}
+                  {store.isOnlineOrderSupported ? (
+                    <Text style={styles.setDefaultText}>Toko ini mendukung order online</Text>
+                  ) : null}
                 </TouchableOpacity>
               );
             })}
@@ -346,14 +575,24 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: SPACING.md,
+    gap: 12,
+  },
+  sectionHeading: {
+    flex: 1,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: COLORS.text,
     marginBottom: SPACING.md,
+  },
+  sectionDescription: {
+    marginTop: -6,
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textSecondary,
   },
   addButton: {
     flexDirection: 'row',
@@ -488,5 +727,20 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 13,
     color: COLORS.textSecondary,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 12,
+    borderRadius: RADIUS.md,
+    backgroundColor: '#FDECEA',
+    marginBottom: SPACING.md,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: COLORS.accent,
   },
 });

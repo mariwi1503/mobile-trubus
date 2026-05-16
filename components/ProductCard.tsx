@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, SHADOWS, SPACING, CARD_WIDTH } from '../constants/theme';
 import { Product } from '../types/product';
 import { useApp } from '../context/AppContext';
+import AddToCartButton from './AddToCartButton';
+import { useCartAnimation } from '../context/CartAnimationContext';
 
 interface ProductCardProps {
   product: Product;
@@ -14,16 +16,20 @@ interface ProductCardProps {
 
 
 export default function ProductCard({ product, compact, fullWidth }: ProductCardProps) {
-
   const router = useRouter();
-  const { addToCart, wishlist, toggleWishlist } = useApp();
+  const { addToCart, isLoggedIn, wishlist, toggleWishlist } = useApp();
+  const { animateToCart } = useCartAnimation();
   const isWished = wishlist.includes(product.id);
   const imageSource = typeof product.image === 'string' ? { uri: product.image } : product.image;
+  const imageContainerRef = useRef<View | null>(null);
 
-  const handleAddToCart = (e: any) => {
-    e.stopPropagation?.();
+  const handleAddToCart = useCallback(async () => {
+    if (!isLoggedIn) {
+      router.push({ pathname: '/(tabs)/profile', params: { login: '1' } });
+      return false;
+    }
 
-    addToCart({
+    return addToCart({
       productId: product.id,
       name: product.name,
       price: product.price,
@@ -32,16 +38,15 @@ export default function ProductCard({ product, compact, fullWidth }: ProductCard
       weight: product.weight,
       store: product.store,
     });
-  };
+  }, [addToCart, isLoggedIn, product.id, product.image, product.name, product.price, product.store, product.weight, router]);
 
   return (
     <TouchableOpacity
       style={[styles.card, compact && styles.cardCompact, fullWidth && styles.cardFullWidth]}
-
       onPress={() => router.push(`/product/${product.id}`)}
       activeOpacity={0.7}
     >
-      <View style={styles.imageContainer}>
+      <View ref={imageContainerRef} style={styles.imageContainer}>
         <Image source={imageSource} style={styles.image} />
         <TouchableOpacity style={styles.wishlistBtn} onPress={() => toggleWishlist(product.id)}>
           <Ionicons name={isWished ? 'heart' : 'heart-outline'} size={18} color={isWished ? COLORS.accent : COLORS.textLight} />
@@ -67,10 +72,23 @@ export default function ProductCard({ product, compact, fullWidth }: ProductCard
             </Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={handleAddToCart}>
-          <Ionicons name="cart-outline" size={14} color={COLORS.white} />
-          <Text style={styles.addBtnText}>Tambah</Text>
-        </TouchableOpacity>
+        <AddToCartButton
+          label="Tambah"
+          loadingLabel="Proses..."
+          idleIcon="cart-outline"
+          iconSize={14}
+          containerStyle={styles.addBtn}
+          textStyle={styles.addBtnText}
+          disableSuccessFeedback
+          onPressStart={(event) => event.stopPropagation?.()}
+          onAdd={handleAddToCart}
+          onSuccess={async () => {
+            await animateToCart({
+              sourceNode: imageContainerRef.current,
+              imageSource,
+            });
+          }}
+        />
       </View>
     </TouchableOpacity>
   );

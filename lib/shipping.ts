@@ -1,6 +1,4 @@
-const MOBILE_API_BASE_URL = (
-  process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:5000'
-).replace(/\/$/, '');
+import { MOBILE_API_BASE_URL } from './api-config';
 
 type ApiEnvelope<T> = {
   data: T;
@@ -13,6 +11,34 @@ export type ShippingLocationOption = {
   id: number;
   name: string;
   zipCode?: string;
+};
+
+export type ShippingQuoteStore = {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  province: string;
+  distanceKm: number;
+  latitude?: number;
+  longitude?: number;
+};
+
+export type ShippingCourierOption = {
+  id: string;
+  courierCode: string;
+  courierName: string;
+  service: string;
+  description: string;
+  cost: number;
+  etd: string;
+};
+
+export type ResolveShippingQuoteResult = {
+  addressId: string;
+  weight: number;
+  selectedStore: ShippingQuoteStore;
+  couriers: ShippingCourierOption[];
 };
 
 function formatErrorMessage(payload: unknown, status: number) {
@@ -82,6 +108,37 @@ async function requestPublicMobileApi<T>(path: string): Promise<T> {
   return parseResponse<T>(response);
 }
 
+function buildAuthorizedHeaders(accessToken: string, init?: RequestInit) {
+  const headers = new Headers(init?.headers);
+
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json');
+  }
+
+  if (init?.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  if (!headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
+  }
+
+  return headers;
+}
+
+async function requestAuthorizedMobileApi<T>(
+  path: string,
+  accessToken: string,
+  init?: RequestInit,
+): Promise<T> {
+  const response = await fetch(`${MOBILE_API_BASE_URL}${path}`, {
+    ...init,
+    headers: buildAuthorizedHeaders(accessToken, init),
+  });
+
+  return parseResponse<T>(response);
+}
+
 type BackendShippingLocation = {
   id: number;
   name: string;
@@ -126,4 +183,22 @@ export async function getShippingSubDistricts(districtId: number) {
   );
 
   return data.map(mapShippingLocation);
+}
+
+export async function resolveShippingQuote(
+  accessToken: string,
+  payload: {
+    addressId: string;
+    weight?: number;
+    courier?: string;
+  },
+) {
+  return requestAuthorizedMobileApi<ResolveShippingQuoteResult>(
+    '/api/v1/mobile/shipping/quote',
+    accessToken,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
 }

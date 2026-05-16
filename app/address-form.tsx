@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
+import LocationMapPicker from '../components/LocationMapPicker';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { validateIndonesianMobilePhone } from '../lib/auth';
@@ -31,7 +33,9 @@ type AddressFormTextFieldKey =
   | 'recipient'
   | 'phone'
   | 'address'
-  | 'additional';
+  | 'additional'
+  | 'latitude'
+  | 'longitude';
 
 type AddressFormState = {
   label: string;
@@ -39,6 +43,8 @@ type AddressFormState = {
   phone: string;
   address: string;
   additional: string;
+  latitude: string;
+  longitude: string;
   isDefault: boolean;
   province?: ShippingLocationOption;
   city?: ShippingLocationOption;
@@ -46,12 +52,21 @@ type AddressFormState = {
   subDistrict?: ShippingLocationOption;
 };
 
+type CoordinateDraft = {
+  latitude: number;
+  longitude: number;
+};
+
+type CoordinateSource = 'device' | 'map' | null;
+
 const emptyFormState = (isDefault = false): AddressFormState => ({
   label: '',
   recipient: '',
   phone: '',
   address: '',
   additional: '',
+  latitude: '',
+  longitude: '',
   isDefault,
 });
 
@@ -81,7 +96,7 @@ const locationFieldMeta: Record<
 };
 
 const textFieldMeta: Array<{
-  key: AddressFormTextFieldKey;
+  key: Extract<AddressFormTextFieldKey, 'label' | 'recipient' | 'phone'>;
   label: string;
   placeholder: string;
   keyboardType?: 'default' | 'phone-pad';
@@ -180,6 +195,15 @@ function findSubDistrictByPostalCode(
   return options.find((option) => option.zipCode?.trim() === postalCode.trim());
 }
 
+function formatCoordinate(value: number) {
+  return value.toFixed(6);
+}
+
+function parseCoordinate(value: string) {
+  const parsedValue = Number.parseFloat(value);
+  return Number.isFinite(parsedValue) ? parsedValue : null;
+}
+
 export default function AddressFormScreen() {
   const router = useRouter();
   const { addresses, createAddress } = useApp();
@@ -191,6 +215,10 @@ export default function AddressFormScreen() {
   const [pickerOptions, setPickerOptions] = useState<ShippingLocationOption[]>([]);
   const [isPickerLoading, setIsPickerLoading] = useState(false);
   const [pickerError, setPickerError] = useState<string | null>(null);
+  const [isMapPickerVisible, setIsMapPickerVisible] = useState(false);
+  const [isResolvingMapLocation, setIsResolvingMapLocation] = useState(false);
+  const [mapDraftCoordinate, setMapDraftCoordinate] = useState<CoordinateDraft | null>(null);
+  const [coordinateSource, setCoordinateSource] = useState<CoordinateSource>(null);
 
   useEffect(() => {
     if (!pickerField) {
@@ -274,6 +302,16 @@ export default function AddressFormScreen() {
   }, [pickerOptions, pickerSearch]);
 
   const postalCode = form.subDistrict?.zipCode || form.city?.zipCode || '';
+  const savedLatitude = parseCoordinate(form.latitude);
+  const savedLongitude = parseCoordinate(form.longitude);
+  const hasSavedCoordinate = savedLatitude !== null && savedLongitude !== null;
+
+  const savedCoordinate = hasSavedCoordinate
+    ? {
+        latitude: savedLatitude,
+        longitude: savedLongitude,
+      }
+    : null;
 
   const handleUseCurrentLocation = async () => {
     setIsUsingCurrentLocation(true);
@@ -328,6 +366,8 @@ export default function AddressFormScreen() {
 
       const nextFormState: AddressFormState = {
         ...form,
+        latitude: formatCoordinate(position.coords.latitude),
+        longitude: formatCoordinate(position.coords.longitude),
         province: matchedProvince,
         city: matchedCity,
         district: matchedDistrict,
@@ -348,6 +388,7 @@ export default function AddressFormScreen() {
       }
 
       setForm(nextFormState);
+      setCoordinateSource('device');
     } catch (error) {
       Alert.alert(
         'Lokasi Belum Bisa Dipakai',
@@ -388,6 +429,8 @@ export default function AddressFormScreen() {
           city: undefined,
           district: undefined,
           subDistrict: undefined,
+          latitude: '',
+          longitude: '',
         };
       }
 
@@ -397,6 +440,8 @@ export default function AddressFormScreen() {
           city: option,
           district: undefined,
           subDistrict: undefined,
+          latitude: '',
+          longitude: '',
         };
       }
 
@@ -405,16 +450,98 @@ export default function AddressFormScreen() {
           ...currentForm,
           district: option,
           subDistrict: undefined,
+          latitude: '',
+          longitude: '',
         };
       }
 
       return {
         ...currentForm,
         subDistrict: option,
+        latitude: '',
+        longitude: '',
       };
     });
 
+    setCoordinateSource(null);
     setPickerField(null);
+  };
+
+  const resolveMapStartingCoordinate = async () => {
+    if (savedCoordinate) {
+      return savedCoordinate;
+    }
+
+    const areaLabel = [
+      form.subDistrict?.name,
+      form.district?.name,
+      form.city?.name,
+      form.province?.name,
+      'Indonesia',
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    if (!areaLabel) {
+      throw new Error(
+        'Pilih minimal provinsi, kota, kecamatan, dan kelurahan terlebih dahulu sebelum membuka peta.',
+      );
+    }
+
+    const geocodeCandidates = [
+      [form.address.trim(), areaLabel].filter(Boolean).join(', '),
+      areaLabel,
+    ];
+
+    for (const candidate of geocodeCandidates) {
+      const geocodeResults = await Location.geocodeAsync(candidate);
+      const firstMatch = geocodeResults[0];
+
+      if (firstMatch?.latitude && firstMatch?.longitude) {
+        return {
+          latitude: firstMatch.latitude,
+          longitude: firstMatch.longitude,
+        };
+      }
+    }
+
+    throw new Error(
+      'Lokasi awal peta belum berhasil ditemukan dari wilayah yang Anda pilih.',
+    );
+  };
+
+  const handleOpenMapPicker = async () => {
+    setIsResolvingMapLocation(true);
+
+    try {
+      const initialCoordinate = await resolveMapStartingCoordinate();
+      setMapDraftCoordinate(initialCoordinate);
+      setIsMapPickerVisible(true);
+    } catch (error) {
+      Alert.alert(
+        'Peta Belum Bisa Dibuka',
+        error instanceof Error
+          ? error.message
+          : 'Lokasi awal peta belum berhasil ditentukan.',
+      );
+    } finally {
+      setIsResolvingMapLocation(false);
+    }
+  };
+
+  const handleConfirmMapLocation = () => {
+    if (!mapDraftCoordinate) {
+      Alert.alert('Pilih Lokasi', 'Geser peta terlebih dahulu untuk menentukan pin alamat.');
+      return;
+    }
+
+    setForm((currentForm) => ({
+      ...currentForm,
+      latitude: formatCoordinate(mapDraftCoordinate.latitude),
+      longitude: formatCoordinate(mapDraftCoordinate.longitude),
+    }));
+    setCoordinateSource('map');
+    setIsMapPickerVisible(false);
   };
 
   const handleSave = async () => {
@@ -447,6 +574,19 @@ export default function AddressFormScreen() {
       return;
     }
 
+    const latitude = Number.parseFloat(form.latitude);
+    const longitude = Number.parseFloat(form.longitude);
+
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+      Alert.alert('Peringatan', 'Latitude belum valid. Gunakan lokasi saat ini atau isi koordinat yang benar.');
+      return;
+    }
+
+    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      Alert.alert('Peringatan', 'Longitude belum valid. Gunakan lokasi saat ini atau isi koordinat yang benar.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -456,6 +596,8 @@ export default function AddressFormScreen() {
         phone: form.phone,
         address: form.address,
         additional: form.additional || undefined,
+        latitude,
+        longitude,
         rajaOngkirSubDistrictId: form.subDistrict.id,
         isPrimary: form.isDefault,
       });
@@ -582,6 +724,72 @@ export default function AddressFormScreen() {
               </View>
             ))}
 
+            <View style={styles.coordinateCard}>
+              <Text style={styles.coordinateCardTitle}>Pin Lokasi Alamat</Text>
+              <Text style={styles.coordinateCardText}>
+                {coordinateSource === 'device'
+                  ? 'Lokasi perangkat sudah dipakai sebagai titik alamat. Anda tidak wajib membuka pin manual lagi, tetapi tetap bisa menyesuaikan pin bila perlu.'
+                  : 'Geser peta untuk menempatkan pin di titik alamat. Pin ini dipakai sistem untuk memilih toko pengirim terdekat.'}
+              </Text>
+
+              <View style={styles.mapPreviewWrap}>
+                {savedCoordinate ? (
+                  <LocationMapPicker
+                    coordinate={savedCoordinate}
+                    interactive={false}
+                    height={190}
+                    label="Pin alamat tersimpan"
+                  />
+                ) : (
+                  <View style={styles.mapPreviewPlaceholder}>
+                    <Ionicons name="map-outline" size={26} color={COLORS.primary} />
+                    <Text style={styles.mapPreviewPlaceholderTitle}>Pin lokasi belum dipilih</Text>
+                    <Text style={styles.mapPreviewPlaceholderText}>
+                      Sistem akan menyiapkan titik awal dari kelurahan, kecamatan, dan kota yang Anda input.
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.mapPickerButton,
+                  isResolvingMapLocation && styles.mapPickerButtonDisabled,
+                ]}
+                onPress={() => {
+                  void handleOpenMapPicker();
+                }}
+                activeOpacity={0.85}
+                disabled={isResolvingMapLocation}
+              >
+                {isResolvingMapLocation ? (
+                  <ActivityIndicator color={COLORS.primary} />
+                ) : (
+                  <Ionicons
+                    name={savedCoordinate ? 'navigate-outline' : 'pin-outline'}
+                    size={18}
+                    color={COLORS.primary}
+                  />
+                )}
+                <Text style={styles.mapPickerButtonText}>
+                  {coordinateSource === 'device'
+                    ? 'Sesuaikan Pin Manual'
+                    : savedCoordinate
+                      ? 'Sesuaikan Pin Lokasi'
+                      : 'Pilih Pin Lokasi'}
+                </Text>
+              </TouchableOpacity>
+
+              {savedCoordinate ? (
+                <Text style={styles.coordinateMetaText}>
+                  {coordinateSource === 'device'
+                    ? 'Koordinat dari lokasi perangkat tersimpan di '
+                    : 'Titik tersimpan di '}
+                  {savedCoordinate.latitude.toFixed(6)}, {savedCoordinate.longitude.toFixed(6)}
+                </Text>
+              ) : null}
+            </View>
+
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>Kode Pos</Text>
               <View style={styles.readonlyField}>
@@ -690,6 +898,66 @@ export default function AddressFormScreen() {
           ) : null}
         </View>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={isMapPickerVisible}
+        animationType="slide"
+        onRequestClose={() => setIsMapPickerVisible(false)}
+      >
+        <View style={styles.mapPickerScreen}>
+          <View style={styles.mapPickerHeader}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => setIsMapPickerVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="arrow-back" size={20} color={COLORS.text} />
+            </TouchableOpacity>
+            <View style={styles.mapPickerHeaderText}>
+              <Text style={styles.mapPickerTitle}>Tentukan Pin Lokasi</Text>
+              <Text style={styles.mapPickerSubtitle}>
+                Geser peta sampai pin berada tepat di alamat pengiriman.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.mapPickerBody}>
+            <LocationMapPicker
+              coordinate={mapDraftCoordinate}
+              interactive
+              height={420}
+              label="Titik alamat"
+              onCoordinateChange={setMapDraftCoordinate}
+            />
+
+            <View style={styles.mapPickerInfoCard}>
+              <Text style={styles.mapPickerInfoTitle}>Titik yang akan disimpan</Text>
+              <Text style={styles.mapPickerInfoText}>
+                {mapDraftCoordinate
+                  ? `${mapDraftCoordinate.latitude.toFixed(6)}, ${mapDraftCoordinate.longitude.toFixed(6)}`
+                  : 'Menunggu titik peta...'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.mapPickerFooter}>
+            <TouchableOpacity
+              style={styles.mapPickerCancelButton}
+              onPress={() => setIsMapPickerVisible(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.mapPickerCancelText}>Batal</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.mapPickerConfirmButton}
+              onPress={handleConfirmMapLocation}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.mapPickerConfirmText}>Gunakan Titik Ini</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -835,6 +1103,76 @@ const styles = StyleSheet.create({
   selectorPlaceholder: {
     color: COLORS.textLight,
   },
+  coordinateCard: {
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: '#F7F9F7',
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+  },
+  coordinateCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  coordinateCardText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.md,
+  },
+  mapPreviewWrap: {
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    backgroundColor: '#EEF4EE',
+  },
+  mapPreviewPlaceholder: {
+    minHeight: 190,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.xl,
+    backgroundColor: '#EEF4EE',
+  },
+  mapPreviewPlaceholderTitle: {
+    marginTop: 10,
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  mapPreviewPlaceholderText: {
+    marginTop: 6,
+    fontSize: 12,
+    lineHeight: 18,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  mapPickerButton: {
+    marginTop: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#E8F5E9',
+    borderRadius: RADIUS.md,
+    paddingVertical: 12,
+  },
+  mapPickerButtonDisabled: {
+    opacity: 0.75,
+  },
+  mapPickerButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  coordinateMetaText: {
+    marginTop: 10,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
   readonlyField: {
     borderWidth: 1,
     borderColor: COLORS.divider,
@@ -949,5 +1287,88 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 19,
+  },
+  mapPickerScreen: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  mapPickerHeader: {
+    paddingTop: 52,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.md,
+    backgroundColor: COLORS.white,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  mapPickerHeaderText: {
+    flex: 1,
+    paddingTop: 2,
+  },
+  mapPickerTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  mapPickerSubtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 18,
+    color: COLORS.textSecondary,
+  },
+  mapPickerBody: {
+    flex: 1,
+    padding: SPACING.lg,
+  },
+  mapPickerInfoCard: {
+    marginTop: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.white,
+  },
+  mapPickerInfoTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  mapPickerInfoText: {
+    marginTop: 6,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  mapPickerFooter: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.xl,
+    backgroundColor: COLORS.white,
+  },
+  mapPickerCancelButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    paddingVertical: 14,
+  },
+  mapPickerCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  mapPickerConfirmButton: {
+    flex: 1.4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+  },
+  mapPickerConfirmText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.white,
   },
 });

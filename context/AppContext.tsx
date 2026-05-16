@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import {
   BackendMobileProfile,
   getMobileUserProfile,
@@ -19,6 +19,18 @@ import {
   type CreateMobileUserAddressPayload,
   updateMobileUserAddress,
 } from '../lib/addresses';
+import {
+  addMobileCartItem,
+  clearMobileCart,
+  getMobileCart,
+  removeMobileCartItem,
+  updateMobileCartItem,
+  type MobileCart,
+} from '../lib/cart';
+import {
+  getMobileProductOrders,
+  type MobileProductOrder,
+} from '../lib/orders';
 
 const Storage = {
   getItem: async (key: string): Promise<string | null> => {
@@ -43,6 +55,7 @@ const Storage = {
 const memoryStorage: Record<string, string> = {};
 
 export interface CartItem {
+  cartItemId?: string;
   productId: string; name: string; price: number; image: any;
   quantity: number; weight: number; store: string;
 }
@@ -116,10 +129,10 @@ interface AppContextType {
   setHasAcceptedTerms: (v: boolean) => void;
   // Cart
   cart: CartItem[];
-  addToCart: (item: CartItem) => void;
-  removeFromCart: (productId: string) => void;
-  updateCartQuantity: (productId: string, quantity: number) => void;
-  clearCart: () => void;
+  addToCart: (item: CartItem) => Promise<boolean>;
+  removeFromCart: (productId: string) => Promise<boolean>;
+  updateCartQuantity: (productId: string, quantity: number) => Promise<boolean>;
+  clearCart: () => Promise<boolean>;
   getCartTotal: () => number;
   getCartCount: () => number;
   // Addresses
@@ -131,6 +144,7 @@ interface AppContextType {
   setDefaultAddress: (id: string) => Promise<void>;
   // Orders
   orders: Order[];
+  refreshOrders: () => Promise<void>;
   addOrder: (order: Order, options?: { silent?: boolean }) => void;
   patchOrder: (orderId: string, patch: Partial<Order>) => void;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
@@ -157,6 +171,10 @@ const SESSION_STORAGE_KEY = 'session';
 const DEFAULT_MALE_AVATAR = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face';
 const DEFAULT_FEMALE_AVATAR = 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&h=200&fit=crop&crop=face';
 const DEFAULT_EXPERT_AVATAR = 'https://ui-avatars.com/api/?name=Ahli&background=E8F5E9&color=1B5E20&size=256';
+const DEFAULT_CART_ITEM_IMAGE =
+  'https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=1200&h=800&fit=crop';
+const DEFAULT_CART_ITEM_WEIGHT = 500;
+const DEFAULT_CART_ITEM_STORE = 'Trubus Official Store';
 
 function formatPhoneForDisplay(phone: string) {
   if (phone.startsWith('62')) {
@@ -211,6 +229,36 @@ function normalizeBackendUser(user: BackendMobileProfile): UserProfile {
     avatar: user.gender === 'FEMALE' ? DEFAULT_FEMALE_AVATAR : DEFAULT_MALE_AVATAR,
     role: 'consumer',
     trubusCoins: 0,
+  };
+}
+
+function mapMobileCartToCartItems(backendCart: MobileCart): CartItem[] {
+  return backendCart.items
+    .filter((item) => item.product?.isShownInApp !== false)
+    .map((item) => ({
+      cartItemId: item.id,
+      productId: item.productId,
+      name: item.product.name,
+      price: item.product.price,
+      image: item.product.thumbnailUrl || DEFAULT_CART_ITEM_IMAGE,
+      quantity: item.qty,
+      weight: DEFAULT_CART_ITEM_WEIGHT,
+      store: DEFAULT_CART_ITEM_STORE,
+    }));
+}
+
+function normalizeMobileProductOrder(order: MobileProductOrder): Order {
+  return {
+    ...order,
+    items: (order.items || []).map((item) => ({
+      productId: item.productId,
+      name: item.name,
+      price: item.price,
+      image: item.image || DEFAULT_CART_ITEM_IMAGE,
+      quantity: item.quantity,
+      weight: item.weight || DEFAULT_CART_ITEM_WEIGHT,
+      store: item.store || order.store || DEFAULT_CART_ITEM_STORE,
+    })),
   };
 }
 
@@ -366,6 +414,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     Storage.setItem('addresses', JSON.stringify(nextAddresses));
   }, []);
 
+  const persistCart = useCallback((nextCart: CartItem[]) => {
+    Storage.setItem('cart', JSON.stringify(nextCart));
+  }, []);
+
   const sortAddresses = useCallback((nextAddresses: Address[]) => {
     return [...nextAddresses].sort((left, right) => {
       if (left.isDefault === right.isDefault) {
@@ -390,6 +442,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsAddressesLoading(false);
     }
   }, [persistAddresses, sortAddresses]);
+
+  const hydrateCart = useCallback(async (accessToken: string) => {
+    const nextCart = mapMobileCartToCartItems(
+      await getMobileCart(accessToken),
+    );
+
+    setCart(nextCart);
+    persistCart(nextCart);
+  }, [persistCart]);
+
+  const hydrateProductOrders = useCallback(async (accessToken: string) => {
+    const nextProductOrders = (
+      await getMobileProductOrders(accessToken)
+    ).map(normalizeMobileProductOrder);
+
+    setOrders((prevOrders) => {
+      const mergedOrders = [
+        ...nextProductOrders,
+        ...prevOrders.filter((order) => order.type !== 'product'),
+      ];
+
+      Storage.setItem('orders', JSON.stringify(mergedOrders));
+      return mergedOrders;
+    });
+  }, []);
+
+  const refreshOrders = useCallback(async () => {
+    if (!authToken || !isLoggedIn) {
+      setOrders((prevOrders) => {
+        const remainingOrders = prevOrders.filter((order) => order.type !== 'product');
+        Storage.setItem('orders', JSON.stringify(remainingOrders));
+        return remainingOrders;
+      });
+      return;
+    }
+
+    await hydrateProductOrders(authToken);
+  }, [authToken, hydrateProductOrders, isLoggedIn]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -430,6 +520,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setAddresses([]);
               persistAddresses([]);
             }
+
+            try {
+              await hydrateCart(session.accessToken);
+            } catch {
+              setCart([]);
+              persistCart([]);
+            }
+
+            try {
+              await hydrateProductOrders(session.accessToken);
+            } catch {
+              // Keep locally cached orders when backend orders are temporarily unavailable.
+            }
           } else {
             clearSession();
           }
@@ -441,7 +544,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
     loadData();
-  }, [clearSession, hydrateAddresses, persistAddresses, persistSession]);
+  }, [clearSession, hydrateAddresses, hydrateCart, hydrateProductOrders, persistAddresses, persistCart, persistSession]);
 
   // Auth
   const login = useCallback(async (phone: string, password: string): Promise<AuthResult> => {
@@ -469,6 +572,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         persistAddresses([]);
       }
 
+      try {
+        await hydrateCart(authResponse.accessToken);
+      } catch {
+        setCart([]);
+        persistCart([]);
+      }
+
+      try {
+        await hydrateProductOrders(authResponse.accessToken);
+      } catch {
+        // Leave local orders as-is when backend sync is temporarily unavailable.
+      }
+
       return { success: true };
     } catch (error) {
       return {
@@ -476,7 +592,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         error: error instanceof Error ? error.message : 'Login gagal',
       };
     }
-  }, [hydrateAddresses, persistAddresses, persistSession]);
+  }, [hydrateAddresses, hydrateCart, hydrateProductOrders, persistAddresses, persistCart, persistSession]);
 
   const register = useCallback(async (data: RegisteredUser, registrationToken: string): Promise<AuthResult> => {
     const phoneError = validateIndonesianMobilePhone(data.phone);
@@ -535,6 +651,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         persistAddresses([]);
       }
 
+      try {
+        await hydrateCart(authResponse.accessToken);
+      } catch {
+        setCart([]);
+        persistCart([]);
+      }
+
+      try {
+        await hydrateProductOrders(authResponse.accessToken);
+      } catch {
+        // Leave local orders as-is when backend sync is temporarily unavailable.
+      }
+
       return { success: true };
     } catch (error) {
       return {
@@ -542,14 +671,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         error: error instanceof Error ? error.message : 'Registrasi gagal',
       };
     }
-  }, [hydrateAddresses, persistAddresses, persistSession]);
+  }, [hydrateAddresses, hydrateCart, hydrateProductOrders, persistAddresses, persistCart, persistSession]);
 
   const logout = useCallback(() => {
     setAuthToken(null);
     setIsLoggedIn(false);
     setUserState(guestUser);
+    setCart([]);
+    Storage.removeItem('cart');
     setAddresses([]);
     Storage.removeItem('addresses');
+    setOrders((prevOrders) => {
+      const remainingOrders = prevOrders.filter((order) => order.type !== 'product');
+      Storage.setItem('orders', JSON.stringify(remainingOrders));
+      return remainingOrders;
+    });
     clearSession();
   }, [clearSession]);
 
@@ -587,26 +723,134 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [authToken, isLoggedIn, persistSession, user.role]);
 
   // Cart
-  const addToCart = useCallback((item: CartItem) => {
+  const addToCart = useCallback(async (item: CartItem) => {
+    if (!authToken || !isLoggedIn) {
+      return false;
+    }
+
+    try {
+      const nextCart = mapMobileCartToCartItems(
+        await addMobileCartItem(authToken, {
+          productId: item.productId,
+          qty: item.quantity,
+        }),
+      );
+
+      setCart(nextCart);
+      persistCart(nextCart);
+      return true;
+    } catch (error) {
+      Alert.alert(
+        'Keranjang Belum Tersimpan',
+        error instanceof Error
+          ? error.message
+          : 'Produk belum berhasil ditambahkan ke keranjang.',
+      );
+      return false;
+    }
+  }, [authToken, isLoggedIn, persistCart]);
+  const removeFromCart = useCallback(async (productId: string) => {
+    const existingItem = cart.find((item) => item.productId === productId);
+
+    if (authToken && isLoggedIn) {
+      if (!existingItem?.cartItemId) {
+        Alert.alert(
+          'Keranjang Belum Sinkron',
+          'Item keranjang ini belum punya ID backend. Coba buka ulang halaman keranjang.',
+        );
+        return false;
+      }
+
+      try {
+        await removeMobileCartItem(authToken, existingItem.cartItemId);
+        const nextCart = cart.filter((item) => item.productId !== productId);
+        setCart(nextCart);
+        persistCart(nextCart);
+        return true;
+      } catch (error) {
+        Alert.alert(
+          'Gagal Menghapus Produk',
+          error instanceof Error
+            ? error.message
+            : 'Produk belum berhasil dihapus dari keranjang.',
+        );
+        return false;
+      }
+    }
+
     setCart(prev => {
-      const existing = prev.find(i => i.productId === item.productId);
-      const newCart = existing
-        ? prev.map(i => i.productId === item.productId ? { ...i, quantity: i.quantity + item.quantity } : i)
-        : [...prev, item];
-      Storage.setItem('cart', JSON.stringify(newCart));
-      return newCart;
+      const nextCart = prev.filter(i => i.productId !== productId);
+      persistCart(nextCart);
+      return nextCart;
     });
-  }, []);
-  const removeFromCart = useCallback((productId: string) => {
-    setCart(prev => { const c = prev.filter(i => i.productId !== productId); Storage.setItem('cart', JSON.stringify(c)); return c; });
-  }, []);
-  const updateCartQuantity = useCallback((productId: string, quantity: number) => {
+    return true;
+  }, [authToken, cart, isLoggedIn, persistCart]);
+  const updateCartQuantity = useCallback(async (productId: string, quantity: number) => {
+    if (quantity <= 0) {
+      return removeFromCart(productId);
+    }
+
+    const existingItem = cart.find((item) => item.productId === productId);
+
+    if (authToken && isLoggedIn) {
+      if (!existingItem?.cartItemId) {
+        Alert.alert(
+          'Keranjang Belum Sinkron',
+          'Item keranjang ini belum punya ID backend. Coba buka ulang halaman keranjang.',
+        );
+        return false;
+      }
+
+      try {
+        await updateMobileCartItem(authToken, existingItem.cartItemId, { qty: quantity });
+        const nextCart = cart.map((item) =>
+          item.productId === productId ? { ...item, quantity } : item,
+        );
+        setCart(nextCart);
+        persistCart(nextCart);
+        return true;
+      } catch (error) {
+        Alert.alert(
+          'Gagal Mengubah Kuantitas',
+          error instanceof Error
+            ? error.message
+            : 'Kuantitas produk belum berhasil diubah.',
+        );
+        return false;
+      }
+    }
+
     setCart(prev => {
-      const c = quantity <= 0 ? prev.filter(i => i.productId !== productId) : prev.map(i => i.productId === productId ? { ...i, quantity } : i);
-      Storage.setItem('cart', JSON.stringify(c)); return c;
+      const nextCart = prev.map(i => i.productId === productId ? { ...i, quantity } : i);
+      persistCart(nextCart);
+      return nextCart;
     });
-  }, []);
-  const clearCart = useCallback(() => { setCart([]); Storage.setItem('cart', '[]'); }, []);
+    return true;
+  }, [authToken, cart, isLoggedIn, persistCart, removeFromCart]);
+  const clearCart = useCallback(async () => {
+    if (authToken && isLoggedIn) {
+      try {
+        if (cart.length > 0) {
+          await clearMobileCart(authToken);
+        }
+        setCart([]);
+        persistCart([]);
+        return true;
+      } catch (error) {
+        Alert.alert(
+          'Gagal Mengosongkan Keranjang',
+          error instanceof Error
+            ? error.message
+            : 'Keranjang belum berhasil dikosongkan.',
+        );
+        return false;
+      }
+    }
+
+    setCart([]);
+    persistCart([]);
+    return true;
+  }, [authToken, cart.length, isLoggedIn, persistCart]);
   const getCartTotal = useCallback(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart]);
   const getCartCount = useCallback(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
 
@@ -729,7 +973,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isOnboarded, setIsOnboarded: handleSetOnboarded, hasAcceptedTerms, setHasAcceptedTerms: handleSetHasAcceptedTerms,
       cart, addToCart, removeFromCart, updateCartQuantity, clearCart, getCartTotal, getCartCount,
       addresses, isAddressesLoading, refreshAddresses, createAddress, removeAddress, setDefaultAddress,
-      orders, addOrder, patchOrder, updateOrderStatus, updateOrderPayment, getDraftOrder,
+      orders, refreshOrders, addOrder, patchOrder, updateOrderStatus, updateOrderPayment, getDraftOrder,
       notifications, addNotification, markNotificationRead, markAllNotificationsRead, getUnreadCount,
       wishlist, toggleWishlist,
       transactions,

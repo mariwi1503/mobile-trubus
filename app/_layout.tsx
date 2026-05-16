@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as NavigationBar from 'expo-navigation-bar';
 import { AppProvider } from '../context/AppContext';
 import { AlertProvider } from '../context/AlertContext';
+import { CartAnimationProvider } from '../context/CartAnimationContext';
 import { COLORS } from '../constants/theme';
 
 export default function RootLayout() {
@@ -23,30 +24,33 @@ export default function RootLayout() {
   return (
     <AppProvider>
       <AlertProvider>
-        <StatusBar style="dark" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: COLORS.background },
-            animation: 'slide_from_right',
-          }}
-        >
-          <Stack.Screen name="index" />
-          <Stack.Screen name="onboarding" />
-          <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
-          <Stack.Screen name="expert/[id]" />
-          <Stack.Screen name="expert/schedule" />
-          <Stack.Screen name="product/[id]" />
-          <Stack.Screen name="checkout" />
-          <Stack.Screen name="payment" />
-          <Stack.Screen name="order-success" />
-          <Stack.Screen name="orders" />
-          <Stack.Screen name="consultations" />
-          <Stack.Screen name="notifications" />
-          <Stack.Screen name="addresses" />
-          <Stack.Screen name="address-form" />
-          <Stack.Screen name="article/[id]" />
-        </Stack>
+        <CartAnimationProvider>
+          <StatusBar style="dark" />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: COLORS.background },
+              animation: 'slide_from_right',
+            }}
+          >
+            <Stack.Screen name="index" />
+            <Stack.Screen name="onboarding" />
+            <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+            <Stack.Screen name="expert/[id]" />
+            <Stack.Screen name="expert/schedule" />
+            <Stack.Screen name="product/[id]" />
+            <Stack.Screen name="checkout" />
+            <Stack.Screen name="payment" />
+            <Stack.Screen name="order/[id]" />
+            <Stack.Screen name="order-success" />
+            <Stack.Screen name="orders" />
+            <Stack.Screen name="consultations" />
+            <Stack.Screen name="notifications" />
+            <Stack.Screen name="addresses" />
+            <Stack.Screen name="address-form" />
+            <Stack.Screen name="article/[id]" />
+          </Stack>
+        </CartAnimationProvider>
       </AlertProvider>
     </AppProvider>
   );
